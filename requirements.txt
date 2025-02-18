@@ -1,0 +1,7 @@
+androguard==3.4.0a1
+kaitaistruct==0.10
+pycryptodome==3.18.0
+more-itertools==8.10.0
+typing_extensions==4.5.0
+rich==13.9.4
+

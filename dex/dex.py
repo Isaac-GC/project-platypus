@@ -3,14 +3,18 @@
 # See line 460
 from typing import List
 
-from pkg_resources import parse_version
+# from pkg_resources import parse_version
+from importlib.metadata import version
+from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream
 from enum import Enum
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+kaitai_version = version('kaitaistruct')
+
+if parse_version(kaitai_version) < parse_version('0.9'):
     raise Exception(
-        "Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+        "Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitai_version))
 
 import dex.vlq_base128_le as vlq_base128_le
 

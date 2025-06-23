@@ -4,7 +4,7 @@ from typing import BinaryIO, Optional, Dict, List
 
 from dex.dex import Dex
 from dex.instructions import *
-from vm.mocks import try_to_mock_method
+from vm.mock_handler import try_to_mock_methods
 
 
 class MultiDex:
@@ -199,7 +199,7 @@ class DexFile:
 
                         self.memory.last_return = None
                         # we do translation here now
-                        try_to_mock_method(instruction_return.ret, instruction_return.parameters, self, method.v)
+                        try_to_mock_methods(instruction_return.ret, instruction_return.parameters, self, method.v)
                     else:
                         # backup old PC before doing the invoke and switching the stack frame
                         old_pc = self.pc

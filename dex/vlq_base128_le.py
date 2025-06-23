@@ -1,12 +1,22 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
-
-from pkg_resources import parse_version
+import sys
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 
+curr_python_version = sys.version_info
+ks_version = kaitaistruct.__version__
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+# Major version is not needed, but just a backup safety check
+if curr_python_version.major == 3 and curr_python_version.minor >= 12:
+    from importlib.metadata import version
+    if int(ks_version.split('.')[1]) < int('0.9'.split('.')[1]):
+        raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % ks_version)
+
+else:
+    from pkg_resources import parse_version
+    if parse_version(ks_version) < parse_version('0.9'):
+        raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % ks_version)
+
 
 class VlqBase128Le(KaitaiStruct):
     """A variable-length unsigned integer using base128 encoding. 1-byte groups

@@ -1,0 +1,92 @@
+## Mocks
+
+### Building a Custom Mock
+
+To properly mock a Java class/method, you need to first
+set it up to mimic Java's pattern as closely as possible.
+
+Take the following method for example:
+`javax.crypto.Cipher.doFinal()`
+
+1. Set up the folder path for class:
+    - Under the `vm.mocks` directory, add in the classpath as folders:
+   `javax`
+   - The full path will be:
+   `<root>/vm/mocks/javax`
+2. Add a python class as the final part of the "path"
+   - In this case, `crypto`
+   - Full path so far: `<root>/vm/mocks/javax/crypto.py`
+3. Add in the proper class in the file:
+   - `class Cipher:`
+4. Finally, add in the method:
+   - `def doFinal()`
+
+
+--- 
+
+### Advanced (useful) Techniques
+
+#### Method Overloading
+
+Unlike in C-languages or Java/Kotlin, you can't straight up overload
+as you would hope/expect.
+
+Instead, you must be a little creative. (*It is recommend to look at the `javax.crypto.Cipher` class for 
+the best reference to see how a mock should be done*)
+
+There are three "decent" ways to do this (there are more, but these are the main ones used or advised to be used):
+
+1. <u>Less Complex Method:</u>  
+   - Cover all potential overloads in a single function instance by having
+   predefined parameters that are by default empty:   
+   `def doSomething(a=None, b=None):`  
+   
+
+2. <u>More Complex Method:</u>  
+  `def doSomething(datatype, *args):`
+   - This requires some additional logic and isn't quite as flexible:
+   ```python
+   ## Example
+   def add(datatype, *args):
+   
+      # if datatype is int
+      # initialize answer as 0
+      if datatype == 'int':
+          answer = 0
+
+      # if datatype is str
+      # initialize answer as ''
+      if datatype == 'str':
+          answer = ''
+   
+      # Traverse through the arguments
+      for x in args:
+
+        # This will do addition if the
+        # arguments are int. Or concatenation
+        # if the arguments are str
+        answer = answer + x
+
+      print(answer)
+   
+   ```
+   
+3. <u>Best Overall</u>
+   - Using `@dispatch` (requires semi-accurate parameter typing)
+    ```python  
+   from multipledispatch import dispatch
+    
+    @dispatch(int, int)
+    def add(x, y):
+      return x + y
+
+    @dispatch(object, object)
+    def add(x, y):
+      return "%s + %s" % (x, y)
+
+    # Returns 3
+    add(1, 2)
+
+    # Returns '1 + hello'
+    add(1, 'hello')
+   ```

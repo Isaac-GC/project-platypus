@@ -2,9 +2,12 @@
 import io
 
 from dex.instructions import *
-from vm.mocks import try_to_mock_method
+from vm.memory import Memory
+from vm.mock_handler import try_to_mock_methods
 from vm.utils import LogHandler
 from dex.dex import Dex
+
+import logging
 
 from typing import Optional, List, BinaryIO, Dict
 
@@ -115,7 +118,7 @@ class VM:
 
                         self.memory.last_return = None
                         # we do translation here now
-                        try_to_mock_method(instruction_return.ret, instruction_return.parameters, self, method.v)
+                        try_to_mock_methods(instruction_return.ret, instruction_return.parameters, self, method.v)
                     else:
                         # backup old PC before doing the invoke and switching the stack frame
                         old_pc = self.pc
@@ -318,17 +321,3 @@ class Method:
             else:
                 msg += ("v%s:%s " % (i, self.v[i]))
         log.debug(msg)
-
-
-class Memory:
-    """
-    This class implements an execution context for the DVM.
-    It includes the execution state information like register values, field values, etc.
-    """
-
-    def __init__(self, dex, fd):
-        self.last_return = None
-        self.static_fields = {}
-        self.instance_fields = {}
-        self.dex = dex
-        self.fd = fd

@@ -1,105 +1,76 @@
 #!/usr/bin/env python
+import importlib
+import inspect
 import io
+import logging
+import pkgutil
+import re
 
 from dex.instructions import *
-from vm.mocks import try_to_mock_method
+from dex.method import Method
+from vm.memory import Memory
+from vm.mock_handler import try_to_mock_methods
 from vm.utils import LogHandler
 from dex.dex import Dex
+from dex.dexfile import DexFile
 
-from typing import Optional, List, BinaryIO
+
+from typing import Optional, List, BinaryIO, Tuple
 
 handler = LogHandler()
 log = logging.getLogger(__name__)
 log.addHandler(handler)
-log.setLevel(logging.INFO)
+log.setLevel(logging.DEBUG)
+
+
 # log.setLevel(logging.DEBUG)
 # log.setLevel(logging.ERROR)
 
+method_parser_regex = re.compile(r"^(.*)->(.*)(?:\((.*)\)(.*)$)?")
 
-## VM Needs to rebuilt to handle dex files
-
-class MultiDexCtx:
-    def __init__(self):
-        self.ctx = 0
-        self.dex_file_idx = 0
+class MultiDexVM:
+    def __init__(self, dex_file_path, deny_list=[]):
+        self.dex_file_path = dex_file_path
         self.dex_files = []
-        self.memory: MultiDexMemory = MultiDexMemory()
+
+        self.static_inits = {}
+        self.lookup_map = {}
+        self.call_stack = []
+
+        self.memory: Memory = Memory()
+        self.method_denylist = deny_list
+
+        self.__register_mocked_methods()
+
+    def __register_mocked_methods(self):
+        mocks_package = "vm.mocks"
+        package = importlib.import_module(mocks_package)
+
+        for _, modname, _ in pkgutil.walk_packages(
+            package.__path__,
+            package.__name__ + ".",
+            onerror=lambda x: None
+        ):
+            try:
+                importlib.import_module(modname)
+            except ImportError as ie:
+                log.error(f"Could not import {modname}")
+
 
     def add_dex_files(self, dex_file_path):
         fd = open(dex_file_path, 'rb')
-        self.dex_files.append({
-            'dex': Dex.from_file(dex_file_path),
-            'fd': io.BytesIO(fd.read())
-        })
-        fd.close()
-
-    def build_class_and_method_dict(self):
-        for dex_file in self.dex_files:
-            for class_def in dex_file.class_defs:
-                clazz = Class(class_def, dex_file['fd'])
-
-
-class Class:
-    def __init__(self, class_def: Dex.ClassDefItem, fd: BinaryIO):
-        self.class_name = class_def.type_name
-        self.raw_class_def = class_def
-
-        self.class_data = None
-        if class_def.class_data:
-            self.class_data = class_def.class_data
-
-        self.methods = {}
-
-    def build_method_dict(self):
-        idx = 0
-        for virtual_method in self.raw_class_def.class_data.virtual_methods:
-            if not idx:
-                idx = virtual_method.method_idx_diff.value
+        log.debug(f"[+] Adding {dex_file_path}")
+        dex_file = DexFile(dex_file_path)
+        self.dex_files.append(dex_file)
+        x = 0
+        for clazz, mthds in dex_file.lookup_map.items():
+            if clazz not in self.lookup_map:
+                # log.debug(f"Adding {clazz} to lookup map")
+                x += 1
+                self.lookup_map[clazz] = mthds # Add the class and its methods
             else:
-                idx += virtual_method.method_idx_diff.value
-
-        idx = 0 # reset idx lookup location
-        for direct_method in self.raw_class_def.class_data.direct_methods:
-            if not idx:
-                idx = direct_method.method_idx_diff.value
-            else:
-                idx += direct_method.method_idx_diff.value
-
-class Method:
-    def __init__(self):
-        pass
-
-
-class MultiDexMemory:
-    def __init__(self, ):
-        self.static_fields = {}
-        self.instance_fields = {}
-        self.last_return = None
-
-
-class VM:
-    def __init__(self, dex_file_path, deny_list=[]):
-        self.dex_file_path = dex_file_path
-        self.dex = Dex.from_file(dex_file_path)
-        # self.dex = Dex.from_bytes(dex_file_path)
-
-        self.static_inits = {}
-
-        self.method_data = {}
-        self.call_stack = []
-        self.build_method_id_to_method_data_dict()
-
-        self.pc = 0
-
-        with open(dex_file_path, "rb") as fd:
-            self.fd = io.BytesIO(fd.read())
-        # self.fd = io.BytesIO(self.dex.data)
-
-        self.memory: Memory = Memory(self.dex, self.fd)
-        self.method_denylist = deny_list
-
-
-
+                log.debug(f"[-] Skipping adding {clazz}")
+        log.debug(f"[+] Added {x} items")
 
     def print_call_stack(self):
         if log.level <= logging.DEBUG:
@@ -108,199 +79,140 @@ class VM:
                 indent += " "
                 print(f"{indent}> {self.get_fqfn(m_id)})")
 
-    def get_fqfn(self, m_id):
-            return f"{self.dex.method_ids[m_id].class_name}.{self.dex.method_ids[m_id].method_name}({self.dex.method_ids[m_id].proto_desc})"
-    def get_method_at_offset(self, method_offset: int, execution_flags: Optional[dict]):
-        self.fd.seek(method_offset)
-        func = Method(self.fd, self.dex, self, execution_flags)
-        func.load_bytecode()
-        return func
+    def get_fqfn(self, method: Method):
+        return f"{method.clazz_name}.{method.method_name}({method.params})"
 
-    def call_method_at_offset(self, method_offset: int, method_args: Optional[list] = None, execution_flags: Optional[dict] = None):
-        self.fd.seek(method_offset)
-        method = Method(self.fd, self, execution_flags)
-        self.pc = self.fd.tell()
-        method.load_bytecode()
+    def lookup_method(self, method_signature):
+        (clazz, mthd, args, ret_vals) = self.parse_method(method_signature)
+        # print(f"Found\n  Class: {clazz},  Method: {mthd}")
 
+        # Trim/fix the class name
+        if clazz[0] != "L":
+            clazz = clazz[1:]
+            # log.debug(f"Adding 'L' item to class {clazz}")
+        if clazz[-1] != ";":
+            clazz = clazz[:-1]
+            # log.debug(f"Adding ';' item to class {clazz}")
+
+
+        log.debug(f"Looking up class: {clazz} and {mthd}")
+        # print(self.lookup_map)
+        if clazz in self.lookup_map:
+            log.debug(f"Found class: {clazz}")
+            if mthd in self.lookup_map[clazz]:
+                log.debug(f"Found method: {mthd}")
+                return self.lookup_map[clazz][mthd]
+        return None
+
+    def parse_method(self, method_signature: str):
+        vals = method_parser_regex.match(method_signature)
+        return (vals.group(1),  # Class
+               vals.group(2),   # Method
+               vals.group(3),   # Arguments
+               vals.group(4))   # Return Value
+
+    def get_method_by_id(self, method_id):
+        for d in self.dex_files:
+            if method_id in d.lookup_by_id_map:
+                return d[method_id]
+        return None
+
+
+    def call_method(self, method: Method, method_args: Optional[list], execution_flags: Optional[dict] = None):
         ret_value = None
         if method_args:
-            method.v[-len(method_args):] = method_args  # Place parameters in the correct registers. Grows downwards
+            # Place parameters in the correct registers. Grows downwards
+            method.registers[-len(method_args):] = method_args
 
-        current_instruction: Instruction = method.instructions[self.pc]
+        self.memory.dex = method.dex
 
-        # not using isInstance because it's so freaking slow
-        while not 0x0e <= current_instruction.opcode <= 0x11 and current_instruction.opcode != 0x27:
-            # While instruction isn't a return instructions
-            log.debug(f"@{hex(current_instruction.address)}")
+        instr_ptr = 0
+        curr_instr: Instruction = method.instructions[instr_ptr]
 
-            current_instruction.print_instruction()
+        log.debug(f"Current Instruction: {curr_instr.prefix}{curr_instr.suffix}")
+
+        # Iterate until a return instruction is encountered (ignoring 'isInstance' because it's slow for r/n)
+        while not 0x0e <= curr_instr.opcode <= 0x11 and curr_instr.opcode != 0x27:
+            log.debug(f"@{hex(curr_instr.opcode)}")
+            curr_instr.print_instruction()
 
             # 0x27: raise, 0x28-0x2a: goto, 0x2b-0x31: switch-case jump, 0x32-0x37: Jmp-if, 0x38-0x3d, Jmp-ifZ
-            if method.do_branching or not 0x28 <= current_instruction.opcode <= 0x3d:
-                instruction_return = current_instruction.execute(self.memory, method.v)
+            if method.do_branching or not 0x28 <= curr_instr.opcode <= 0x3d:
+                instruction_ret_value = curr_instr.execute(self.memory, method.registers)
+                instr_ptr += 1
 
-                if instruction_return.is_external_call:
-                    fqn = self.dex.method_ids[instruction_return.ret].class_name + "->" + \
-                          self.dex.method_ids[instruction_return.ret].method_name
-                    params = [method.v[i] for i in instruction_return.parameters]
-                    self.pc = super(type(current_instruction), current_instruction).execute(self.memory, method.v).ret
+                if instruction_ret_value.is_external_call:
+                    fqn = method.clazz_name + "->" + method.method_name
+                    params = [method.registers[i] for i in instruction_ret_value.parameters]
+                    curr_instr = super(type(curr_instr), curr_instr).execute(self.memory, method.registers).ret
+
                     log.debug("Calling method: %s" % (fqn + str(params)))
                     # log.info("(0x%x) Calling method: %s" % (self.pc, fqn + str(params)))
-                    if not self.method_data.get(instruction_return.ret, None):
-                        log.debug("Method ID %s not found, trying translation" % instruction_return.ret)
 
-                        self.memory.last_return = None
-                        # we do translation here now
-                        try_to_mock_method(instruction_return.ret, instruction_return.parameters, self, method.v)
+                    if isinstance(instruction_ret_value.ret, int):
+                        ret_val = self.get_method_by_id(instruction_ret_value.ret)
+                        if not ret_val:
+                            log.debug("Method %s not found, trying translation" % instruction_ret_value.ret)
+
+                            self.memory.last_return = None # Forget it and try seeing if there is mock method for it
+                            try_to_mock_methods(instruction_ret_value.ret, instruction_ret_value.parameters, self, method.registers)
+                            curr_instr = method.instructions[instr_ptr]
                     else:
-                        # backup old PC before doing the invoke and switching the stack frame
-                        old_pc = self.pc
                         if len(self.call_stack) < 16:
-                            if not any([x in fqn for x in self.method_denylist]):
-                                self.memory.last_return = self.call_method_by_id(instruction_return.ret, params)
+                            if not any([dm in fqn for dm in self.method_denylist]):
+                                self.memory.last_return = self.call_method(instruction_ret_value.ret, params)
                             else:
                                 self.memory.last_return = None
-                                log.info("Method in denylist, skipping %s" % (fqn))
+                                log.info(f"Method in denylist, skipping {fqn}")
                         else:
                             self.memory.last_return = None
-                            log.error("Call stack size exceeded for %s" % (self.dex.method_ids[instruction_return.ret].class_name + "->" +
-                                                      self.dex.method_ids[instruction_return.ret].method_name))
-                        # restore old PC now that we resumed execution
-                        self.pc = old_pc
-                elif instruction_return:
-                    self.pc = instruction_return.ret
+                            log.error(f"Call stack size exceeded for {instruction_ret_value.ret}")
 
-                current_instruction = method.instructions[self.pc]
+                        curr_instr = method.instructions[instr_ptr]
+
+
+                elif instruction_ret_value:
+                    curr_instr = method.instructions[instruction_ret_value.ret]
+
+                # else:
+                #     instr_ptr += 1
+                #     curr_instr = method.instructions[instr_ptr]
+
+                curr_instr = method.instructions[instr_ptr]
+
             else:
-                # find the next instruction
-                self.pc += 2
-                while (current_instruction := method.instructions.get(self.pc, None)) is None:
-                    self.pc += 2
+                instr_ptr += 1
+                curr_instr = method.instructions[instr_ptr]
+                # while(curr_instr := method.instructions.get("", None)) is None:
 
             method.print_registers()
 
-        current_instruction.print_instruction()
+        curr_instr.print_instruction()
 
-        # this should be a RET or except
-        self.pc = current_instruction.execute(self.memory, method.v)
-
+        # This should be a RET or EXCEPT
+        curr_instr.execute(self.memory, method.params)
         return self.memory.last_return
 
-    def call_method_by_id(self, method_id: int, method_args: Optional[List], execution_flags: Optional[dict] = {}):
-        # call the static and instance constructor for the class in which the method we called resides
-        # TODO: rewrite this so it won't look like a hack
-        if not self.static_inits.get(self.dex.method_ids[method_id].class_name, False):
-            self.static_inits[self.dex.method_ids[method_id].class_name] = True
-            for index, method in enumerate(self.dex.method_ids):
-                if method.method_name == "<clinit>" and method.class_name == self.dex.method_ids[method_id].class_name:
-                    log.debug("Calling static constructor: " + method.class_name + "->" + method.method_name)
-                    self.call_method_at_offset(self.method_data[index].code_off.value)
-                if method.method_name == "<init>" and method.class_name == self.dex.method_ids[method_id].class_name:
-                    log.debug("Calling constructor: " + method.class_name + "->" + method.method_name)
-                    self.call_method_at_offset(self.method_data[index].code_off.value)
+    # TODO: Cleanup, this can simplified even further
+    def get_method_by_signature(self, method_signature):
+        method: Method = self.lookup_method(method_signature)
 
-        if method_offset := self.method_data[method_id].code_off.value:
-            self.call_stack.append(method_id)
-            ret = self.call_method_at_offset(method_offset, method_args, execution_flags)
-            self.call_stack.pop()
-            return ret
-        elif (True):
-            pass
-            # TODO: put multidex code here
+        if method:
+            if method.clazz_name not in self.static_inits:
+                if method.method_name == "<clinit>":
+                    log.debug(f"Calling static constructor: {method.clazz_name}->{method.method_name}")
 
+                if method.method_name == "<init>":
+                    log.debug(f"Calling constructor: {method.clazz_name}->{method.method_name}")
 
-def build_instruction(context: VM) -> Instruction:
-    opcode = b2i(context.fd.read(1))
+            if not method.is_native() and not method.is_abstract():
+                return method
 
-    if opcode == 0x00:
-        pc = context.fd.tell()
-        next_opcode = b2i(context.fd.read(1))
-        # look ahead for packed switch data
-        if next_opcode == 0x01:
-            num_elements = b2i(context.fd.read(2))
-            _elements_base = b2i(context.fd.read(4))
-            _data = context.fd.read(4 * num_elements)
-            # TODO: fix hack
-            return Nop(0x0)
-        # look ahead for packed switch data
-        elif next_opcode == 0x02:
-            num_elements = b2i(context.fd.read(2))
-            _data = context.fd.read(4 * num_elements * 2)
-            # TODO: fix hack
-            return Nop(0x0)
-        # look ahead for the array-data pseudo instruction
-        elif next_opcode == 0x03:
-            b_per_element = b2i(context.fd.read(2))
-            num_elements = b2i(context.fd.read(4))
-            _arr_data = context.fd.read(b_per_element * num_elements)
-            return Nop(0x0)
-        else:
-            context.fd.seek(pc)
-            return Nop(0x0)
-    elif 0x01 <= opcode <= 0x09:
-        return Move(opcode)
-    elif 0x0a <= opcode <= 0x0d:
-        return MoveResult(opcode)
-    elif 0x0e <= opcode <= 0x11:
-        return Return(opcode)
-    elif 0x12 <= opcode <= 0x1c:
-        return Const(opcode)
-    elif 0x1d <= opcode <= 0x1e:
-        return Monitor(opcode)
-    elif opcode == 0x1f:
-        return CheckCast(opcode)
-    elif opcode == 0x20:
-        return InstanceOf(opcode)
-    elif opcode == 0x21:
-        return ArrLength(opcode)
-    elif opcode == 0x22:
-        return NewInstance(opcode)
-    elif 0x23 <= opcode <= 0x26:
-        return Array(opcode)
-    elif opcode == 0x27:
-        return Throw(opcode)
-    elif 0x28 <= opcode <= 0x2a:
-        return Goto(opcode)
-    elif 0x2b <= opcode <= 0x2c:
-        return Switch(opcode)
-    elif 0x2d <= opcode <= 0x31:
-        return Cmp(opcode)
-    elif 0x32 <= opcode <= 0x37:
-        return If(opcode)
-    elif 0x38 <= opcode <= 0x3d:
-        return IfZ(opcode)
-    elif 0x44 <= opcode <= 0x51:
-        return ArrayOp(opcode)
-    elif 0x52 <= opcode <= 0x5f:
-        return IOp(opcode)
-    elif 0x60 <= opcode <= 0x66:
-        return SGet(opcode)
-    elif 0x67 <= opcode <= 0x6d:
-        return SPut(opcode)
-    elif 0x6e <= opcode <= 0x72:
-        return InvokeKind(opcode)
-    elif 0x74 <= opcode <= 0x78:
-        return InvokeKindRange(opcode)
-    elif 0x7b <= opcode <= 0x8f:
-        return UnOp(opcode)
-    elif 0x90 <= opcode <= 0xaf:
-        return BinOp(opcode)
-    elif 0xb0 <= opcode <= 0xcf:
-        return BinOp2Addr(opcode)
-    elif 0xd0 <= opcode <= 0xe2:
-        return BinOpLit(opcode)
-    else:
-        raise OpCodeNotFoundError(opcode)
+            else:
+                # Returns nothing. Need to implement abstract method construction and native method calling
+                # TODO: Abstract Method Construction
+                #
+                # TODO: Native Method handling/calling
+                return None
 
-class Memory:
-    """
-    This class implements an execution context for the DVM.
-    It includes the execution state information like register values, field values, etc.
-    """
-
-    def __init__(self, dex, fd):
-        self.last_return = None
-        self.static_fields = {}
-        self.instance_fields = {}
-        self.dex = dex
-        self.fd = fd
+        return None

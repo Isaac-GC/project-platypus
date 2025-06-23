@@ -1,4 +1,7 @@
 import logging
+
+from dex.dex import Dex
+# from dex.dexfile import DexFile
 from vm.utils import LogHandler
 from dex.helpers import *
 
@@ -16,12 +19,16 @@ class InstructionReturn:
         self.is_external_call = is_external_call
         self.parameters = parameters
 
+
 class Instruction:
 
     def __init__(self, opcode):
         self.fmt: int = 0x0
         self.prefix: str = "NOP"
         self.suffix: str = ""
+
+        self.method_reference = None
+        self.control_flow = None
 
         self.opcode = opcode
 
@@ -91,12 +98,12 @@ class Instruction:
         self.address = fd.tell() - 1
 
     def execute(self, memory, v):
-        new_pc = self.address + 1 + (self.fmt.bit_length() + 7) // 8
+        # new_pc = self.address + 1 + (self.fmt.bit_length() + 7) // 8
         # align PC to 2 bytes
-        new_pc += new_pc % 2
+        # new_pc += new_pc % 2
 
-        log.debug(new_pc)
-        return InstructionReturn(new_pc, False, [])
+        # log.debug(new_pc)
+        return InstructionReturn(1, False, [])
 
 
 class OpCodeNotFoundError(Exception):
@@ -867,6 +874,15 @@ class InvokeKind(Instruction):
         super().decode(fd)
         (self.vE, self.vX, self.vZ, self.vA, self.vB, self.vC, self.vD) = self.decode_args(fd)
 
+        # Lookup the method name
+        # if self.vZ != 0:
+        #     class_name = dex_file_ref.method_ids[self.vZ].class_name
+        #     mthd_name = dex_file_ref.method_ids[self.vZ].method_name
+        #     proto_desc = dex_file_ref.method_ids[self.vZ].proto_desc
+        #     self.method = f"{class_name}->{mthd_name}({proto_desc})"
+        # else:
+        #     self.method = ""
+
     def print_instruction(self):
         args = [self.vA, self.vB, self.vC, self.vD, self.vE]
         log.debug(("%s-%s args_nr:%s method@%s " + ("v%s") * self.vX) %
@@ -875,7 +891,7 @@ class InvokeKind(Instruction):
     def execute(self, memory, v):
         args_arr = [self.vA, self.vB, self.vC, self.vD, self.vE]
         # don't send more arguments than we've got
-        # TODO: do another bugfixing round
+        # TODO: do another bug fixing round
 
         # TODO: FIX NEEDS_MORE_WORK
         needs_more_work = True
@@ -891,7 +907,10 @@ class InvokeKind(Instruction):
         params = [self.vA, self.vB, self.vC, self.vD, self.vE]
         params = params[0:self.vX]
         if needs_more_work:
-            return InstructionReturn(self.vZ, True, params)
+            method_ref = memory.dex.lookup_method(self.vZ)
+
+            # return InstructionReturn(self.vZ, True, params)
+            return InstructionReturn(method_ref, True, params)
         else:
             return super().execute(memory, v)
 
@@ -906,6 +925,15 @@ class InvokeKindRange(Instruction):
     def decode(self, fd) -> None:
         super().decode(fd)
         (self.vA, self.vB, self.vC) = self.decode_args(fd)
+
+        # Lookup the method name
+        # if self.vZ != 0:
+        #     class_name = dex_file_ref.method_ids[self.vB].class_name
+        #     mthd_name = dex_file_ref.method_ids[self.vB].method_name
+        #     proto_desc = dex_file_ref.method_ids[self.vB].proto_desc
+        #     self.method = f"{class_name}->{mthd_name}({proto_desc})"
+        # else:
+        #     self.method = ""
 
     def print_instruction(self):
         log.debug("%s-%s args_nr:%s method@%s v%s" % (self.prefix, self.suffix, self.vA, self.vB, self.vC))
@@ -994,7 +1022,7 @@ class UnOp(Instruction):
                 v[self.vA] = tmp1
                 v[self.vA + 1] = tmp2
             case 0x82 | 0x86 | 0x87 | 0x8b:
-                pass  # no need to trim/exted datatype
+                pass  # no need to trim/extend datatype
             case 0x81 | 0x83 | 0x88 | 0x89:
                 tmp1 = 0x00000000
                 tmp2 = v[self.vB]
@@ -1002,7 +1030,7 @@ class UnOp(Instruction):
                 v[self.vA] = 0x00000000
                 v[self.vA + 1] = tmp2
             case 0x84 | 0x85 | 0x8a | 0x8c:
-                # get the least significat 32 bits and put them into the destination
+                # get the least significant 32 bits and put them into the destination
                 # this is dumb, why did I do this?
                 v[self.vA] = (v[self.vB] << 32) + v[self.vB + 1] & 0xFFFFFFFF
                 # pass

@@ -8,7 +8,7 @@ class Memory:
     for per-thread capabilities (will be implemented later)
     """
 
-    def __init__(self, dex, fd):
+    def __init__(self, dex=None, fd=None):
         self.last_return = None
         self.last_exception = None
 

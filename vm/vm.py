@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 import io
 
-from dex.instructions import *
 from vm.memory import Memory
 from vm.mock_handler import try_to_mock_methods
 from vm.utils import LogHandler
 from dex.dex import Dex
+
+from dex.helpers import *
+from dex.instructions import *
+
 
 import logging
 

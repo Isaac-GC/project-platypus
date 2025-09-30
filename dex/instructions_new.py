@@ -421,7 +421,7 @@ class InstanceOf(InstructionBase):
         self.address = fd.tell() - 1
         (self.vA, self.vB, self.vC) = self.decode_args(fd)
 
-    def execute(self, memory, registers):
+    # def execute(self, memory, registers):
 
 
 
@@ -1266,18 +1266,18 @@ class InvokeCustom(InstructionBase):
             (self.vA, self.vB, self.vC) = self.decode_args(fd)
 
 
-    def execute(self, memory, registers):
-        method_ref = memory.dex.lookup_method(self.vB)
-        call_site_data = memory.dex.
-
-        # if self.opcode == 0xfa:
-        params = [i for i in range(self.vC, self.vC + self.vA)]
-        memory.method_instr_values = {
-            'method_ref': method_ref,
-            'proto_ref': proto_ref,
-            'is_external_call': True,
-            'params': params
-        }
+    # def execute(self, memory, registers):
+    #     method_ref = memory.dex.lookup_method(self.vB)
+    #     call_site_data = memory.dex.
+    #
+    #     # if self.opcode == 0xfa:
+    #     params = [i for i in range(self.vC, self.vC + self.vA)]
+    #     memory.method_instr_values = {
+    #         'method_ref': method_ref,
+    #         'proto_ref': proto_ref,
+    #         'is_external_call': True,
+    #         'params': params
+    #     }
 
 
 class ConstMethod(InstructionBase):

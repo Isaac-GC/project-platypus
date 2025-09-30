@@ -354,7 +354,7 @@ types:
     instances:
       class_name:
         value: _root.type_ids[class_idx].type_name
-        doc: the definer of this field
+        doc: sthe definer of this field
       type_name:
         value: _root.type_ids[type_idx].type_name
         doc: the type of this field
@@ -624,6 +624,7 @@ types:
           The offset should be to a location in the data section.
 
           The format of the data is specified by "code_item" below.
+
   class_data_item:
     seq:
       - id: static_fields_size
@@ -746,6 +747,69 @@ types:
         type: type_item
         repeat: expr
         repeat-expr: num_list
+  code_item:
+    seq:
+      - id: registers_size
+        type: u2
+      - id: ins_size
+        type: u2
+      - id: outs_size
+        type: u2
+      - id: tries_size
+        type: u2
+      - id: debug_offset
+        type: u4
+      - id: insns_size
+        type: u4
+      - id: insns
+        type: u2
+        repeat: expr
+        repeat-expr: insns_size
+      - id: padding
+        type: u2
+      - id: tries
+        type: try_item
+        repeat: expr
+        repeat-expr: tries_size
+      - id: handler
+        type: encoded_catch_handler_list
+
+  try_item:
+    seq:
+      - id: start_addr
+        type: u4
+      - id: insn_count
+        type: u2
+      - id: handler_off
+        type: u2
+
+  encoded_catch_handler_list:
+    seq:
+      - id: size
+        type: vlq_base128_le
+      - id: list
+        type: encoded_catch_handler
+        repeat: expr
+        repeat-expr: size.value
+
+  encoded_catch_handler:
+    seq:
+      - id: size
+        type: vlq_base128_le
+      - id: handlers
+        type: encoded_type_addr_pair
+        repeat: expr
+        repeat-expr: size.value
+      - id: catch_all_addr
+        type: vlq_base128_le
+
+  encoded_type_addr_pair:
+    seq:
+      - id: type_idx
+        type: vlq_base128_le
+      - id: addr
+        type: vlq_base128_le
+
 enums:
   class_access_flags:
     0x0001: public     # public: visible everywhere

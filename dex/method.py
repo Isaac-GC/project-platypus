@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import logging
 from typing import BinaryIO
 
+import dex.instructions
 from dex import vlq_base128_le
-from dex.dex import Dex
 
 from dex.instructions import *
 
 from dex.access_flags import Method_AccessFlags
+from dex.dex import Dex
 from dex.helpers import b2i
 
 from vm.utils import LogHandler
@@ -79,6 +81,7 @@ class Method:
             if self.tries_size > 0:
                 if self.instr_size % 2 == 0:
                     self.padding = b2i(self.dex.fd.read(2))
+                self.tries_entrypoint_address = self.fd.tell()
                 self.__parse_tries_statements()
 
 
@@ -122,6 +125,11 @@ class Method:
             instruction.decode(self.fd)
             self.instructions.append(instruction)
             instruction.print_instruction()
+
+    # def __fix_goto_statements(self):
+    #     for instr in self.instructions:
+    #         if isinstance(instr, dex.instructions.Goto):
+
 
     def __parse_tries_statements(self):
         while (self.fd.tell() - self.tries_entrypoint_address) < self.tries_size * 2:
@@ -231,7 +239,7 @@ class EncodedCatchHandler:
         self.is_negative = False
 
     def fetch(self, fd: BinaryIO, dex):
-        self.size = vlq_base128_le.VlqBase128Le(fd).value
+        self.size = vlq_base128_le.VlqBase128Le(fd)
         self.is_negative = True if self.size > 0 else False
 
         # Let's make sure we make the size always positive from this point on
@@ -240,13 +248,13 @@ class EncodedCatchHandler:
 
         for i in range(self.size * -2):
             self.handlers.append({
-                'type_id': dex.type_ids[vlq_base128_le.VlqBase128Le(fd).value],
-                'addr': vlq_base128_le.VlqBase128Le(fd).value
+                'type_id': dex.type_ids[vlq_base128_le.VlqBase128Le(fd)],
+                'addr': vlq_base128_le.VlqBase128Le(fd)
             })
 
         # if negative, there will be a catch_all handler
         if self.is_negative:
-            self.catch_all_addr = vlq_base128_le.VlqBase128Le(fd).value
+            self.catch_all_addr = vlq_base128_le.VlqBase128Le(fd)
 
 
 
@@ -256,7 +264,7 @@ class EncodedCatchHandlerList:
         self.handler_list = []
 
     def fetch(self, fd: BinaryIO, dex):
-        self.size = vlq_base128_le.VlqBase128Le(fd).value
+        self.size = vlq_base128_le.VlqBase128Le(fd)
 
         while fd.tell() < ( self.size * 2 ):
             catchHandler = EncodedCatchHandler()

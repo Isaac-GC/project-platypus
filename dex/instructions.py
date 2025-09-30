@@ -1,10 +1,8 @@
 import logging
 
-from dex.dex import Dex
 # from dex.dexfile import DexFile
 from vm.utils import LogHandler
 from dex.helpers import *
-
 
 handler = LogHandler()
 log = logging.getLogger(__name__)
@@ -505,6 +503,7 @@ class Goto(Instruction):
         if self.opcode in [0x29, 0x2a]:
             fd.read(1)
         self.vA = self.decode_args(fd)
+        log.info(f"Goto self.vA: {self.vA}")
 
     def print_instruction(self):
         log.debug("%s%s @%s" % (self.prefix, self.suffix, hex(self.vA)))

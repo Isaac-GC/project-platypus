@@ -1,13 +1,11 @@
 import hashlib
 import io
 import logging
-from typing import BinaryIO, Optional, Dict, List
 
 from dex import vlq_base128_le
 from dex.clazz import Clazz
 from dex.dex import Dex
 from dex.helpers import b2i
-from multidex_old import Method
 from vm.utils import LogHandler
 
 # from dex.instructions import InvokeKind, InvokeKindRange

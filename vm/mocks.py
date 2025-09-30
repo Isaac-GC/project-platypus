@@ -1,5 +1,3 @@
-import logging
-
 from vm.utils import *
 from base64 import b64decode, urlsafe_b64decode
 from dex.helpers import string_hash_code

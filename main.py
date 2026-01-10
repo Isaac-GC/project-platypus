@@ -12,6 +12,7 @@ from rich.console import Console
 from multidex_vm import MultiDexVM
 from target_helpers import TargetClass
 from vm.utils import LogHandler
+from vm.vm import VM
 
 handler = LogHandler()
 log = logging.getLogger("main")
@@ -67,30 +68,33 @@ def run_dalvik_vm(target_apk: APK, target_method: str, target_method_args: Optio
             dex_file.write(target_apk.get_file(dex_name))
 
 
-    vm = MultiDexVM(package_path)
+    # vm = MultiDexVM(package_path)
+    vm = VM(package_path)
     for dex_file in dex_file_names:
         log.debug(f"Loading {dex_file}")
         vm.add_dex_files(f"{package_path}/{dex_file}")
+
+    log.debug(f"[+] Dex files loaded: {len(vm.dex_files)}")
 
     # Check to make sure target_method is in correct format
     if target_method[0] != "L":
         target_method = f"L{target_method}"
 
-    # method_exists = vm.lookup_method('Lkotlin/jvm/internal/Intrinsics;->fi')
-    # log.debug(f"Method exists: {False if method_exists is None else method_exists}")
+    method_exists = vm.lookup_method('Lkotlin/jvm/internal/Intrinsics;->fi')
+    log.debug(f"Method exists: {False if method_exists is None else method_exists}")
     method = vm.lookup_method(target_method)
     # log.debug(f"Calling: {method.clazz_name}->{method.method_name}")
 
     x = 0
     for clazz in vm.lookup_map.keys():
-        for mthd in vm.lookup_map[clazz]:
+        for _ in vm.lookup_map[clazz]:
             x += 1
 
     log.debug(f"[+] A total of {x} methods were added")
 
     if method:
-        vm.call_method(method, target_method_args)
-
+        ret_val = vm.call_method(method, target_method_args)
+        print(ret_val)
 
 
 if __name__ == '__main__':
@@ -99,7 +103,7 @@ if __name__ == '__main__':
 
     (tgt_clazz, target_mthd, target) = test_items(console=reg_console)
 
-    run_dalvik_vm(apk_image, target, None)
+    run_dalvik_vm(apk_image, target, ["ub/hrg7swpDirI6F5rjLlQ=="])
 
     # root_logger = logging.getLogger()
     # formatter = JsonFormatter()

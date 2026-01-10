@@ -2,6 +2,8 @@ import hashlib
 import io
 import logging
 
+from kaitaistruct import KaitaiStream
+
 from dex import vlq_base128_le
 from dex.clazz import Clazz
 from dex.dex import Dex
@@ -112,7 +114,9 @@ class DexFile:
                 call_site_item_offset = b2i(self.fd.read(4))
 
                 self.fd.seek(call_site_item_offset)
-                size = vlq_base128_le.VlqBase128Le(self.fd).value
+
+                stream = KaitaiStream(self.fd)
+                size = vlq_base128_le.VlqBase128Le(stream).value
                 call_site_item = CallSiteItem()
 
                 encoded_array = []

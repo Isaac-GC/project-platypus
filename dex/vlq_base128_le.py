@@ -7,7 +7,7 @@ curr_python_version = sys.version_info
 ks_version = kaitaistruct.__version__
 
 # Major version is not needed, but just a backup safety check
-if curr_python_version.major == 3 and curr_python_version.minor >= 12:
+if curr_python_version.major == 3 and curr_python_version.minor >= 10:
     from importlib.metadata import version
 
     if int(ks_version.split('.')[1]) < int('0.9'.split('.')[1]):

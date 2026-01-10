@@ -1,4 +1,5 @@
 import logging
+from enum import Enum
 from typing import BinaryIO
 
 from dex.helpers import b2i, nibble_at, twos_complement
@@ -81,12 +82,12 @@ def reg_ops_helper(operator_type, operand_type, b, c):
 
     return a
 
-class ControlFlow:
-    Terminate = 0x0
-    GoTo = 0x1
-    Branch = 0x2
-    FallThrough = 0x3
 
+class ControlFlow(Enum):
+    Terminate = 0x1
+    GoTo = 0x2
+    Branch = 0x3
+    FallThrough = 0x4
 
 class OpCodeNotFoundError(Exception):
     def __init__(self, opcode):
@@ -113,6 +114,9 @@ class InstructionBase:
         # used by some instructions
         self.operator_type = 0
         self.operand_type = 0
+
+        # Only used for NOP types and the contained payload formats
+        self.nop_data = {}
 
         # Method Registers (Pre-staging)
         # Corresponds to Dalvik Instruction Formats
@@ -146,6 +150,8 @@ class InstructionBase:
 
         arg_length = 1 # Arg length in nibbles (4 bits)
         while fmt:
+            # print(hex(fmt))
+            # print(decoded_args)
             if tail != fmt & 0xF:
                 decoded_args.append({
                     'len': arg_length,
@@ -164,8 +170,12 @@ class InstructionBase:
             'signed': tail >= 0xA
         })
 
+        x = 0
         while len(decoded_args) > 0:
             decoded_arg = decoded_args.pop()
+
+            if x > 15:
+                print("Stuck in a loop here")
 
             if decoded_arg['len'] == 1:
                 byte = b2i(fd.read(1))
@@ -185,33 +195,69 @@ class InstructionBase:
             else:
                 bytez = b2i(fd.read(decoded_arg['len'] // 2))
                 if decoded_arg['signed']:
-                    nibble_1 = twos_complement(bytez, decoded_arg['len'] // 2)
+                    bytez = twos_complement(bytez, decoded_arg['len'] // 2)
 
-                return returned_args.append(bytez)
+                returned_args.append(bytez)
 
-            if len(returned_args) > 1:
-                return tuple(returned_args)
-            else:
-                return returned_args[0]
+            x += 1
+
+        if len(returned_args) > 1:
+            return tuple(returned_args)
+        else:
+            return returned_args[0]
 
 
     def execute(self, memory, registers):
         return InstructionReturn(1, False, [])
 
-
 class Nop(InstructionBase):
 
     def fetch(self) -> None:
-        self.fmt = 0x11
+        self.fmt = 0x10
+
+    def decode(self, fd) -> None:
+        self.address = fd.tell()
+
+        # Moved the below to the relevant addresses
+        ###################################
+
+        # next_opcode = b2i(fd.read(1))
+        #
+        # match next_opcode:
+        #     case 0x01: # Packed-Switch-Data
+        #         num_elements = b2i(fd.read(2))
+        #         _first_key = b2i(fd.read(1))
+        #         _targets = [fd.read(4) for _ in range(num_elements)]
+        #
+        #         self
+        #
+        #     case 0x02: # Sparse-Switch-Data
+        #         num_elements = b2i(fd.read(2))
+        #         _keys = [fd.read(4) for _ in range(num_elements)]
+        #         _targets = [fd.read(4) for _ in range(num_elements)]
+        #
+        #
+        #     case 0x03: # Fill-Array-Data
+        #         element_width = b2i(fd.read(2))
+        #         num_elements = b2i(fd.read(4))
+        #         _data = [ fd.read(element_width) for _ in range(num_elements) ]
+        #
+        #     case _: # Will otherwise be none of the above and the "next opcode" should be used as the "current opcode"
+        #         pass # Do nothing as the `fd` address will already be moved and the NOP will already be generated :)
 
 
+    def print_instruction(self):
+        log.debug("nop")
 
+    def execute(self, memory, v):
+        return super().execute(memory, v)
 
 class Move(InstructionBase):
 
     def fetch(self) -> None:
         obj_type = ["", "-wide", "-object"]
-        self.prefix = f"move{obj_type[self.opcode // 3]}"
+        suffix_iter = self.opcode % 3
+        self.prefix = f"move{obj_type[self.opcode % 3]}"
 
         match self.opcode:
             case 0x01 | 0x04 | 0x07:
@@ -233,6 +279,9 @@ class Move(InstructionBase):
             fd.read(1)
         (self.vA, self.vB) = self.decode_args(fd)
 
+    def print_instruction(self):
+        log.debug("%s%s v%s v%s" % (self.prefix, self.suffix, self.vA, self.vB))
+
     def execute(self, memory, registers):
         if self.opcode not in [0x04, 0x05, 0x06]: # wide instructions
             registers[self.vA] = registers[self.vB]
@@ -240,7 +289,7 @@ class Move(InstructionBase):
             registers[self.vA] = registers[self.vB]
             registers[self.vA + 1] = registers[self.vB + 1]
 
-        memory.last_return = 1
+        memory.last_return = self.vA
 
 
 class MoveResult(InstructionBase):
@@ -264,6 +313,9 @@ class MoveResult(InstructionBase):
         self.address = fd.tell() - 1
         self.vA = self.decode_args(fd)
 
+    def print_instruction(self):
+        log.debug("%s v%s" % (self.prefix, self.vA))
+
     def execute(self, memory, registers):
         if self.opcode == 0x0b: # if it's 'move-result-wide'
             try:
@@ -277,8 +329,6 @@ class MoveResult(InstructionBase):
 
         else:
             registers[self.vA] = memory.last_return
-
-        memory.last_return = 1
 
 class Return(InstructionBase):
 
@@ -301,6 +351,12 @@ class Return(InstructionBase):
     def decode(self, fd):
         self.address = fd.tell() - 1
         self.vA = self.decode_args(fd)
+
+    def print_instruction(self):
+        if self.opcode != 0x0e:
+            log.debug("%s v%s" % (self.prefix, self.vA))
+        else:
+            log.debug("%s" % self.prefix)
 
     def execute(self, memory, registers):
         match self.opcode:
@@ -359,6 +415,9 @@ class Const(InstructionBase):
         self.address = fd.tell() - 1
         (self.vA, self.vB) = self.decode_args(fd)
 
+    def print_instruction(self):
+        log.debug("%s%s v%s %s" % (self.prefix, self.suffix, self.vA, self.vB))
+
     def execute(self, memory, registers):
         match self.opcode:
             case 0x12 | 0x13 | 0x14 | 0x18:
@@ -395,6 +454,9 @@ class Monitor(InstructionBase):
         self.fmt = 0x11
         self.prefix = "monitor"
 
+    def print_instruction(self):
+        log.debug("monitor-enter/exit %s" % self.vA)
+
     def decode(self, fd):
         self.address = fd.tell() - 1
         self.vA = self.decode_args(fd)
@@ -410,6 +472,9 @@ class CheckCast(InstructionBase):
         self.address = fd.tell() - 1
         (self.vA, self.vB) = self.decode_args(fd)
 
+    def print_instruction(self):
+        log.debug("check-cast %s v%s" % (self.vA, self.vB))
+
 
 class InstanceOf(InstructionBase):
 
@@ -420,6 +485,9 @@ class InstanceOf(InstructionBase):
     def decode(self, fd):
         self.address = fd.tell() - 1
         (self.vA, self.vB, self.vC) = self.decode_args(fd)
+
+    def print_instruction(self):
+        log.debug("instance-of v%s v%s @%s" % (self.vA, self.vB, self.vC))
 
     # def execute(self, memory, registers):
 
@@ -438,6 +506,9 @@ class ArrLength(InstructionBase):
     def decode(self, fd):
         self.address = fd.tell() - 1
         (self.vA, self.vB) = self.decode_args(fd)
+
+    def print_instruction(self):
+        log.debug("%s v%s v%s" % (self.prefix, self.vA, self.vB))
 
     def execute(self, memory, registers):
         try:
@@ -459,6 +530,9 @@ class NewInstance(InstructionBase):
     def decode(self, fd):
         self.address = fd.tell() - 1
         (self.vA, self.vB) = self.decode_args(fd)
+
+    def print_instruction(self):
+        log.debug("%s v%s" % (self.prefix, self.vA))
 
     def execute(self, memory, registers):
         if "String" in memory.dex.type_ids[self.vB].type_name:
@@ -501,6 +575,16 @@ class Array(InstructionBase):
             case 0x26:
                 (self.vA, self.vB) = self.decode_args(fd)
 
+    def print_instruction(self):
+        # print(f"{self.vA}, {self.vB}, {self.vC}")
+        try:
+            if self.vC:
+                log.debug("%s v%s v%s @%s" % (self.prefix, self.vA, self.vB, hex(self.vC)))
+            else:
+                log.debug("%s v%s v%s" % (self.prefix, self.vA, self.vB))
+        except AttributeError:
+            log.debug("%s v%s @%s" % (self.prefix, self.vA, self.vB))
+
     def execute(self, memory, registers):
         match self.opcode:
             case 0x23:
@@ -531,7 +615,7 @@ class Array(InstructionBase):
             case 0x25:
                 new_array = []
                 num_items = 0
-                try:  # Checking to make sure whats in vB is actually a num
+                try:  # Checking to make sure what's in vB is actually a num
                     num_items = self.vA + self.vC
                     new_array = registers[self.vA:num_items - 1]
 
@@ -563,6 +647,9 @@ class Throw(InstructionBase):
         self.address = fd.tell() - 1
         self.vA = self.decode_args(fd)
 
+    def print_instruction(self):
+        log.debug("throw v%s" % self.vA)
+
     def execute(self, memory, registers):
         memory.last_exception = self.vA
 
@@ -593,9 +680,12 @@ class Goto(InstructionBase):
             fd.read(1)
         self.vA = self.decode_args(fd)
 
+    def print_instruction(self):
+        log.debug("%s%s @%s" % (self.prefix, self.suffix, hex(self.vA * 2)))
+
     def execute(self, memory, registers):
         # Lookup the next instruction address
-        return self.address + (self.vA * 2)
+        return self.vA * 2
 
 
 class Switch(InstructionBase):
@@ -612,13 +702,15 @@ class Switch(InstructionBase):
         self.address = fd.tell() - 1
         (self.vA, self.vB) = self.decode_args(fd)
 
-        # Read packed switch data
-        old_fd = fd.tell()
+        # Read Packed-Switch-Payload data
+        ###################################
+        old_fd = fd.tell() # Backup current cursor
 
-        fd.seek(old_fd + (self.vB * 2) - 6)
-        fd.read(2) # Shift forward two spots
+        # vB == signed "branch" offset to table data
+        fd.seek(old_fd + (self.vB * 2) - 6) # (3 code units == 6 bytes) --> navigates to the actual table data start
+        fd.read(2) # Shift forward two spots (skipping the `ident` portion
 
-        num_elements = b2i(fd.read(2))
+        num_elements = b2i(fd.read(2)) # "size" = ushort <-- always present
 
         if self.opcode == 0x2b: # packed-switch
             element_base = twos_complement(b2i(fd.read(4)), 4)
@@ -626,12 +718,17 @@ class Switch(InstructionBase):
                 self.switch_table[element_base + i] = twos_complement(b2i(fd.read(4)), 4)
 
         elif self.opcode == 0x2c: # sparse-switch
-            for i in range(0, num_elements):
+
+            for i in range(0, num_elements): # keys
                 self.switch_table[twos_complement(b2i(fd.read(4)), 4)] = 0
-            for key in self.switch_table.keys():
+
+            for key in self.switch_table.keys(): # target
                 self.switch_table[key] = twos_complement(b2i(fd.read(4)), 4)
 
         fd.seek(old_fd)
+
+    def print_instruction(self) -> None:
+        log.debug("switch v%s @%s" % (self.vA, self.vB))
 
     def execute(self, memory, registers):
         found_switch_branch = False
@@ -654,6 +751,9 @@ class Cmp(InstructionBase):
     def decode(self, fd):
         self.address = fd.tell() - 1
         (self.vA, self.vB, self.vC) = self.decode_args(fd)
+
+    def print_instruction(self):
+        log.debug("cmp v%s v%s v%s" % (self.vA, self.vB, self.vC))
 
     def execute(self, memory, registers):
         if self.opcode >= 0x2f:
@@ -696,6 +796,9 @@ class If(InstructionBase):
         self.address = fd.tell() - 1
         (self.vA, self.vB, self.vC) = self.decode_args(fd)
 
+    def print_instruction(self):
+        log.debug("%s-%s v%s v%s @%s" % (self.prefix, self.suffix, self.vA, self.vB, hex(self.vC)))
+
     def execute(self, memory, registers):
         ret = 1
 
@@ -703,31 +806,31 @@ class If(InstructionBase):
             match self.opcode:
                 case 0x32:
                     if registers[self.vA] == registers[self.vB]:
-                        ret = self.address + self.vC * 2
+                        ret = self.vC * 2
 
                 case 0x33:
                     if registers[self.vA] != registers[self.vB]:
-                        ret = self.address + self.vC * 2
+                        ret = self.vC * 2
 
                 case 0x34:
                     if registers[self.vA] < registers[self.vB]:
-                        ret = self.address + self.vC * 2
+                        ret = self.vC * 2
 
                 case 0x35:
                     if registers[self.vA] >= registers[self.vB]:
-                        ret = self.address + self.vC * 2
+                        ret = self.vC * 2
 
                 case 0x36:
                     if registers[self.vA] > registers[self.vB]:
-                        ret = self.address + self.vC * 2
+                        ret = self.vC * 2
 
                 case 0x37:
                     if registers[self.vA] <= registers[self.vB]:
-                        ret = self.address + self.vC * 2
+                        ret = self.vC * 2
 
         memory.last_return = ret
 
-class Ifz(InstructionBase):
+class IfZ(InstructionBase):
 
     def fetch(self) -> None:
         self.fmt = 0x11AAAA
@@ -748,28 +851,31 @@ class Ifz(InstructionBase):
         self.address = fd.tell() - 1
         (self.vA, self.vB) = self.decode_args(fd)
 
+    def print_instruction(self):
+        log.debug("%s v%s @%s" % (self.prefix, self.vA, hex(self.vB)))
+
     def execute(self, memory, registers):
         ret = 1
         if registers[self.vA]:
             match self.opcode:
                 case 0x38:
                     if registers[self.vA] == 0:
-                        ret = self.address + self.vB * 2
+                        ret = self.vB * 2
                 case 0x39:
                     if registers[self.vA] != 0:
-                        ret = self.address + self.vB * 2
+                        ret = self.vB * 2
                 case 0x3a:
                     if registers[self.vA] < 0:
-                        ret = self.address + self.vB * 2
+                        ret = self.vB * 2
                 case 0x3b:
                     if registers[self.vA] >= 0:
-                        ret = self.address + self.vB * 2
+                        ret = self.vB * 2
                 case 0x3c:
                     if registers[self.vA] > 0:
-                        ret = self.address + self.vB * 2
+                        ret = self.vB * 2
                 case 0x3d:
                     if registers[self.vA] <= 0:
-                        ret = self.address + self.vB * 2
+                        ret = self.vB * 2
 
             memory.last_return = ret
 
@@ -782,7 +888,7 @@ class ArrayOp(InstructionBase):
             case op if 0x44 <= op <= 0x4a:
                 self.prefix = f"aget{MODIFIER_TYPE_LOOKUP[op - 0x44]}"
             case op if 0x4b <= op <= 0x51:
-                self.prefix = f"aget{MODIFIER_TYPE_LOOKUP[op - 0x4b]}"
+                self.prefix = f"aput{MODIFIER_TYPE_LOOKUP[op - 0x4b]}"
             case _:
                 raise OpCodeNotFoundError(self.opcode)
 
@@ -790,16 +896,18 @@ class ArrayOp(InstructionBase):
         self.address = fd.tell() - 1
         (self.vA, self.vB, self.vC) = self.decode_args(fd)
 
+    def print_instruction(self):
+        log.debug("%s v%s v%s @v%s" % (self.prefix, self.vA, self.vB, self.vC))
+
     def execute(self, memory, registers):
-        if 0x44 <= self.opcode <= 0x4a:
+        if 0x44 <= self.opcode <= 0x4a: # get
             try:
                 registers[self.vA] = registers[self.vB][registers[self.vC]]
             except TypeError as te:
                 log.error(f"TypeError encountered {te}: {registers[self.vB]}")
 
-        elif 0x4b <= self.opcode <= 0x51:
+        elif 0x4b <= self.opcode <= 0x51: # put
             registers[self.vB][registers[self.vC]] = registers[self.vA]
-
 
 class IGet(InstructionBase):
 
@@ -814,6 +922,9 @@ class IGet(InstructionBase):
     def decode(self, fd):
         self.address = fd.tell() - 1
         (self.vA, self.vB, self.vC) = self.decode_args(fd)
+
+    def print_instruction(self):
+        log.debug("%s-%s v%s v%s @%s" % (self.prefix, self.suffix, self.vA, self.vB, self.vC))
 
     def execute(self, memory, registers):
         if self.vC == 4418: pass # Handle this
@@ -839,6 +950,10 @@ class IPut(InstructionBase):
         self.address = fd.tell() - 1
         (self.vA, self.vB, self.vC) = self.decode_args(fd)
 
+    def print_instruction(self):
+        log.debug("%s-%s v%s v%s @%s" % (self.prefix, self.suffix, self.vA, self.vB, self.vC))
+
+
     def execute(self, memory, registers):
         memory.instance_fields[self.vC] = registers[self.vA]
 
@@ -850,7 +965,7 @@ class IPut(InstructionBase):
 class SGet(InstructionBase):
 
     def fetch(self) -> None:
-        self.fmt = 0x123333
+        self.fmt = 0x112222
 
         if 0x60 <= self.opcode <= 0x66:
             self.prefix = f"sget{MODIFIER_TYPE_LOOKUP[self.opcode - 0x66]}"
@@ -860,6 +975,9 @@ class SGet(InstructionBase):
     def decode(self, fd):
         self.address = fd.tell() - 1
         (self.vA, self.vB) = self.decode_args(fd)
+
+    def print_instruction(self):
+        log.debug("%s-%s v%s @v%s" % (self.prefix, self.suffix, self.vA, self.vB))
 
     def execute(self, memory, registers):
         registers[self.vA] = memory.static_fields.get(self.vB, None)
@@ -889,6 +1007,9 @@ class SPut(InstructionBase):
         self.address = fd.tell() - 1
         (self.vA, self.vB) = self.decode_args(fd)
 
+    def print_instruction(self):
+        log.debug("%s-%s v%s @v%s" % (self.prefix, self.suffix, self.vA, self.vB))
+
     def execute(self, memory, registers):
         memory.static_fields[self.vB] = registers[self.vA]
 
@@ -912,9 +1033,23 @@ class InvokeKind(InstructionBase):
         else:
             raise OpCodeNotFoundError(self.opcode)
 
+    def print_instruction(self):
+        args = [self.vA, self.vB, self.vC, self.vD, self.vE, self.vG, self.vF]
+
+        arg_registers = ""
+        if self.vC: arg_registers += f" v{self.vC}"
+        if self.vD: arg_registers += f" v{self.vD}"
+        if self.vE: arg_registers += f" v{self.vE}"
+        if self.vF: arg_registers += f" v{self.vF}"
+        if self.vG: arg_registers += f" v{self.vG}"
+
+        log.debug("%s args_nr:%s method@%s%s" %
+                  (self.prefix, self.vA, self.vB, arg_registers))
+
     def decode(self, fd):
         self.address = fd.tell() - 1
-        (self.vA, self.vG, self.vB, self.vF, self.vE, self.vD, self.vC) = self.decode_args(fd)
+
+        (self.vG, self.vA, self.vB, self.vC, self.vD, self.vE, self.vF) = self.decode_args(fd)
 
     def execute(self, memory, registers):
         avail_params = [self.vC, self.vD, self.vE, self.vF, self.vG]
@@ -923,11 +1058,14 @@ class InvokeKind(InstructionBase):
         if self.vA > 0:
             params = avail_params[0:self.vA]
 
-        memory.method_instr_values = {
-            'method_ref': method_ref,
-            'is_external_call': True,
-            'params': params
-        }
+        print(self.vA, self.vG, self.vB, self.vF, self.vE, self.vD)
+
+        return InstructionReturn(method_ref, True, params)
+        # memory.method_instr_values = {
+        #     'method_ref': method_ref,
+        #     'is_external_call': True,
+        #     'params': params
+        # }
 
 class InvokeKindRange(InstructionBase):
 
@@ -944,15 +1082,19 @@ class InvokeKindRange(InstructionBase):
         self.address = fd.tell() - 1
         (self.vA, self.vB, self.vC) = self.decode_args(fd)
 
+    def print_instruction(self):
+        log.debug("%s args_nr:%s method@%s v%s" % (self.prefix, self.vA, self.vB, self.vC))
+
     def execute(self, memory, registers):
         params = [i for i in range(self.vC, self.vC + self.vA)]
         method_ref = memory.dex.lookup_method(self.vB)
 
-        memory.method_instr_values = {
-            'method_ref': method_ref,
-            'is_external_call': True,
-            'params': params
-        }
+        return InstructionReturn(method_ref, True, params)
+        # memory.method_instr_values = {
+        #     'method_ref': method_ref,
+        #     'is_external_call': True,
+        #     'params': params
+        # }
 
 
 class UnOp(InstructionBase):
@@ -1009,6 +1151,10 @@ class UnOp(InstructionBase):
         self.address = fd.tell() - 1
         (self.vA, self.vB) = self.decode_args(fd)
 
+    def print_instruction(self):
+        log.debug("%s v%s v%s" % (self.prefix, self.vA, self.vB))
+
+
     def execute(self, memory, registers):
         match self.opcode:
             case 0x7b | 0x7f: # neg-int | neg-float
@@ -1017,7 +1163,7 @@ class UnOp(InstructionBase):
                 except TypeError as te:
                     registers[self.vA] = 0
             case 0x7c | 0x7e: # not-int | not-long
-                ~registers[self.vA] = ~registers[self.vB]
+                registers[self.vA] = ~registers[self.vB]
             case 0x7d | 0x80: # neg-long | neg-double
                 registers[self.vA] = -registers[self.vB]
                 registers[self.vA + 1] = -registers[self.vB + 1]
@@ -1080,6 +1226,9 @@ class BinOp(InstructionBase):
         self.address = fd.tell() - 1
         (self.vA, self.vB, self.vC) = self.decode_args(fd)
 
+    def print_instruction(self):
+        log.debug("%s v%s v%s v%s" % (self.prefix, self.vA, self.vB, self.vC))
+
     def execute(self, memory, registers):
         b = None
         c = None
@@ -1136,6 +1285,9 @@ class BinOp2Addr(InstructionBase):
     def decode(self, fd):
         self.address = fd.tell() - 1
         (self.vA, self.vB) = self.decode_args(fd)
+
+    def print_instruction(self):
+        log.debug("%s-%s/2addr v%s v%s" % (self.prefix, self.suffix, self.vA, self.vB))
 
     def execute(self, memory, registers):
         b = None
@@ -1195,6 +1347,9 @@ class BinOpLit(InstructionBase):
     def decode(self, fd):
         self.address = fd.tell() - 1
         (self.vA, self.vB, self.vC) = self.decode_args(fd)
+
+    def print_instruction(self):
+        log.debug("%s-%s v%s v%s %s" % (self.prefix, self.suffix, self.vA, self.vB, self.vC))
 
     def execute(self, memory, registers):
         b = registers[self.vB] # passed in value

@@ -15,13 +15,18 @@ def _0init0(args, state_data): # <init> functions must always replace '<'/'>' wi
 
 @register_mock
 def append(args, state_data):
+    curr_registers = state_data['current_registers']
+    param_vals = state_data['raw_param_values']
     try:
-        args[0] = f"{str(args[0])}{chr[args[1]]}"
+        # args[0] = f"{str(args[0])}{chr[args[1]]}"
+        curr_registers[param_vals[0]] += curr_registers[param_vals[1]]
     except TypeError as te:
         try:
-            args[0] = f"{str(args[0])}{args[1].decode('utf-8')}"
+            curr_registers[param_vals[0]] += curr_registers[param_vals[1]].decode('utf-8')
+            # args[0] = f"{str(args[0])}{args[1].decode('utf-8')}"
         except AttributeError as ae:
-            args[0] = f"{str(args[0])}{str(args[1])}"
+            curr_registers[param_vals[0]] += str(curr_registers[param_vals[1]])
+            # args[0] = f"{str(args[0])}{str(args[1])}"
 
     return args[0]
 

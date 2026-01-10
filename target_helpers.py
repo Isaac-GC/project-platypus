@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from vm.utils import LogHandler
-from vm.vm import VM
+from vm.vm_old import VM
 
 handler = LogHandler()
 log = logging.getLogger("main")

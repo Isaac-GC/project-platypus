@@ -1,4 +1,10 @@
+import inspect
+
 def b2i(raw_bytes):
+    # curr_frame = inspect.currentframe()
+    # calframe = inspect.getouterframes(curr_frame, 3)
+    # print(f"Caller {calframe[1][3]}")
+    # print(f"Called b2i {x} times")
     return int.from_bytes(raw_bytes, "little")
 
 

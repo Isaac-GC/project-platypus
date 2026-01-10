@@ -10,7 +10,8 @@ rfmt_regex = re.compile(r"->")
 handler = LogHandler()
 log = logging.getLogger(__name__)
 log.addHandler(handler)
-log.setLevel(logging.INFO)
+# log.setLevel(logging.INFO)
+log.setLevel(logging.DEBUG)
 
 MOCKS_REGISTRY = {}
 
@@ -19,7 +20,8 @@ STATE_DATA = {}
 
 # Needs the VM reference passed into mocked method
 METHOD_VM_NEEDED = [
-    'Ljava_lang_Thread_getStackTrace'
+    'Ljava_lang_Thread_getStackTrace',
+    'Ljava_lang_Throwable_getStackTrace'
 ]
 
 def register_mock(func):
@@ -44,9 +46,14 @@ def register_mock(func):
     return func
 
 
+# TODO: Fix the params not being properly passed in
 # The vm parameter is probably not used, but its added here JIC
 def execute_mocked_method(fcqn, mocked_method: Callable, params, vm, registers):
     args = [ registers[param] for param in params ]
+
+
+    STATE_DATA['current_registers'] = registers
+    STATE_DATA['raw_param_values'] = params
 
     if fcqn in METHOD_VM_NEEDED:
         ret_val = mocked_method(args, STATE_DATA, vm)
@@ -69,7 +76,7 @@ def try_to_mock_methods(method, params: list, multi_dex_vm, registers):
 
     if method_fqn:
         try:
-            str_params = [str(registers[param])[0:8] for param in params]
+            str_params = [str(registers[param]) for param in params]
         except IndexError:
             str_params = params
 
@@ -87,6 +94,10 @@ def try_to_mock_methods(method, params: list, multi_dex_vm, registers):
         mthd_result = execute_mocked_method(fcqn, mocked_method, params, multi_dex_vm, registers)
         multi_dex_vm.memory.last_return = mthd_result
 
+
+
+def reformat_method_name(method_name):
+    method_name = method_name.replace('<', '0').replace('>', '0')
 
 
 def convert_to_camel_case(some_str: str):

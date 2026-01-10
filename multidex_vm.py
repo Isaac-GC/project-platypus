@@ -141,8 +141,10 @@ class MultiDexVM:
                 instruction_ret_value = curr_instr.execute(self.memory, method.registers)
                 instr_ptr += 1
 
-                if instruction_ret_value.is_external_call:
+                if instruction_ret_value and instruction_ret_value.is_external_call:
                     fqn = method.clazz_name + "->" + method.method_name
+                    print(method.registers)
+                    print(f"{instruction_ret_value.ret} || {instruction_ret_value.parameters}")
                     params = [method.registers[i] for i in instruction_ret_value.parameters]
                     curr_instr = super(type(curr_instr), curr_instr).execute(self.memory, method.registers).ret
 
@@ -172,6 +174,7 @@ class MultiDexVM:
 
 
                 elif instruction_ret_value:
+                    print(instruction_ret_value.ret)
                     curr_instr = method.instructions[instruction_ret_value.ret]
 
                 # else:

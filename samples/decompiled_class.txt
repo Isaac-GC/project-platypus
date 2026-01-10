@@ -1,0 +1,33 @@
+package com.score.time;
+
+import android.view.textclassifier.TextClassificationManager;
+import android.view.textclassifier.TextClassifier;
+import android.widget.TextView;
+import androidx.annotation.NonNull;
+
+/* loaded from: classes.dex */
+public final class AbstractBuilder {
+    public TextView MiddlewarePreferences;
+    public TextClassifier ReaderModel;
+
+    public static final class MiddlewarePreferences {
+        @NonNull
+        public static TextClassifier MiddlewarePreferences(@NonNull TextView textView) {
+            TextClassificationManager textClassificationManager = (TextClassificationManager) textView.getContext().getSystemService(TextClassificationManager.class);
+            return textClassificationManager != null ? textClassificationManager.getTextClassifier() : TextClassifier.NO_OP;
+        }
+    }
+
+    public AbstractBuilder(TextView textView) {
+        this.MiddlewarePreferences = (TextView) ModuleReaderBuilder.WriterJava(textView);
+    }
+
+    public TextClassifier MiddlewarePreferences() {
+        TextClassifier textClassifier = this.ReaderModel;
+        return textClassifier == null ? MiddlewarePreferences.MiddlewarePreferences(this.MiddlewarePreferences) : textClassifier;
+    }
+
+    public void ReaderModel(TextClassifier textClassifier) {
+        this.ReaderModel = textClassifier;
+    }
+}

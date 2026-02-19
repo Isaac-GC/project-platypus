@@ -17,13 +17,16 @@ class InstructionReturn:
         self.is_external_call = is_external_call
         self.parameters = parameters
 
-
+# TODO: Add capability to actually get a string formatted version of the instruction rather than just log it (used for smali code)
 class Instruction:
 
     def __init__(self, opcode):
         self.fmt: int = 0x0
         self.prefix: str = "NOP"
         self.suffix: str = ""
+
+        # sets the full instruction string to be used as smali (later) or log output
+        self.full_instruction_str = ""
 
         self.method_reference = None
         self.control_flow = None
@@ -112,13 +115,13 @@ class OpCodeNotFoundError(Exception):
 class Move(Instruction):
 
     def fetch(self) -> None:
-        self.prefix = "MOVE(OBJ)"
+        self.prefix = "move(obj)"
 
         match self.opcode:
             case 0x01 | 0x07 | 0x04:
                 self.fmt = 0x12
             case 0x02 | 0x08 | 0x05:
-                self.suffix = "/FROM16"
+                self.suffix = "/from16"
                 self.fmt = 0x112222
             case 0x03 | 0x09 | 0x06:
                 self.suffix = "/16"
@@ -131,10 +134,12 @@ class Move(Instruction):
         # align bytes
         if self.opcode in [0x03, 0x09, 0x06]:
             fd.read(1)
+
         (self.vA, self.vB) = self.decode_args(fd)
+        self.full_instruction_str = f"{self.prefix}{self.suffix} v{self.vA} v{self.vB}"
 
     def print_instruction(self):
-        log.debug("%s%s v%s v%s" % (self.prefix, self.suffix, self.vA, self.vB))
+        log.debug(self.full_instruction_str)
 
     def execute(self, memory, v):
         if self.opcode not in [0x04, 0x05, 0x06]:
@@ -149,7 +154,7 @@ class Move(Instruction):
 class MoveResult(Instruction):
 
     def fetch(self) -> None:
-        self.prefix = "MOVE-RESULT(EX)"
+        self.prefix = "move-result(ex)"
         match self.opcode:
             case 0x0a | 0x0b | 0x0c | 0x0d:
                 self.fmt = 0x11
@@ -159,9 +164,11 @@ class MoveResult(Instruction):
     def decode(self, fd) -> None:
         super().decode(fd)
         self.vA = self.decode_args(fd)
+        self.full_instruction_str = f"{self.prefix} v{self.vA}"
 
     def print_instruction(self):
-        log.debug("%s v%s" % (self.prefix, self.vA))
+        log.debug(self.full_instruction_str)
+
 
     def execute(self, memory, v):
         if self.opcode != 0x0b:
@@ -182,7 +189,7 @@ class MoveResult(Instruction):
 class Return(Instruction):
 
     def fetch(self) -> None:
-        self.prefix = "RETURN"
+        self.prefix = "return"
         match self.opcode:
             case 0x0e | 0x0f | 0x10 | 0x11:
                 self.fmt = 0x11
@@ -193,11 +200,13 @@ class Return(Instruction):
         super().decode(fd)
         self.vA = self.decode_args(fd)
 
-    def print_instruction(self):
         if self.opcode != 0x0e:
-            log.debug("%s v%s" % (self.prefix, self.vA))
+            self.full_instruction_str = f"{self.prefix} v{self.vA}"
         else:
-            log.debug("%s-VOID" % self.prefix)
+            self.full_instruction_str = f"{self.prefix}-void"
+
+    def print_instruction(self):
+        log.debug(self.full_instruction_str)
 
     def execute(self, memory, v):
         if self.opcode == 0x0e:
@@ -216,10 +225,10 @@ class Nop(Instruction):
 
     def decode(self, fd) -> None:
         super().decode(fd)
-        pass
+        self.full_instruction_str = f"nop"
 
     def print_instruction(self):
-        log.debug("NOP")
+        log.debug(self.full_instruction_str)
 
     def execute(self, memory, v):
         return super().execute(memory, v)
@@ -228,7 +237,7 @@ class Nop(Instruction):
 class Const(Instruction):
 
     def fetch(self) -> None:
-        self.prefix = "CONST"
+        self.prefix = "const"
         match self.opcode:
             case 0x12:
                 self.suffix = "/4"
@@ -240,28 +249,28 @@ class Const(Instruction):
                 self.suffix = ""
                 self.fmt = 0x11AAAAAAAA
             case 0x15:
-                self.suffix = "/HIGH16"  # 420#BLAZEIT
+                self.suffix = "/high16"
                 self.fmt = 0x11AAAA
             case 0x16:
-                self.suffix = "-WIDE/16"
+                self.suffix = "-wide/16"
                 self.fmt = 0x11AAAA
             case 0x17:
-                self.suffix = "-WIDE/32"
+                self.suffix = "-wide/32"
                 self.fmt = 0x11AAAAAAAA
             case 0x18:
-                self.suffix = "-WIDE"
+                self.suffix = "-wide"
                 self.fmt = 0x11AAAAAAAAAAAAAAAA
             case 0x19:
-                self.suffix = "WIDE/HIGH16"
+                self.suffix = "wide/high"
                 self.fmt = 0x11AAAA
             case 0x1a:
-                self.suffix = "-STRING"
+                self.suffix = "-string"
                 self.fmt = 0x112222
             case 0x1b:
-                self.suffix = "-STRING/JUMBO"
+                self.suffix = "-string/jumbo"
                 self.fmt = 0x1122222222
             case 0x1c:
-                self.suffix = "-CLASS"
+                self.suffix = "-class"
                 self.fmt = 0x112222
             case _:
                 raise OpCodeNotFoundError(self.opcode)
@@ -269,9 +278,10 @@ class Const(Instruction):
     def decode(self, fd) -> None:
         super().decode(fd)
         (self.vA, self.vB) = self.decode_args(fd)
+        self.full_instruction_str = f"{self.prefix}{self.suffix} v{self.vA} {self.vB}"
 
     def print_instruction(self):
-        log.debug("%s%s v%s %s" % (self.prefix, self.suffix, self.vA, self.vB))
+        log.debug(self.full_instruction_str)
 
     def execute(self, memory, v):
         if self.opcode in [0x1a, 0x1b]:
@@ -307,7 +317,7 @@ class Const(Instruction):
 class Monitor(Instruction):
 
     def print_instruction(self):
-        log.debug("MONITOR-ENTER/EXIT %s" % self.vA)
+        log.debug(self.full_instruction_str)
 
     def fetch(self) -> None:
         self.fmt = 0x11
@@ -316,11 +326,17 @@ class Monitor(Instruction):
         super().decode(fd)
         self.vA = self.decode_args(fd)
 
+        if self.opcode == 0x1d:
+            self.full_instruction_str = f"monitor-enter {self.vA}"
+        else:
+            self.full_instruction_str = f"monitor-exit {self.vA}"
+
+
 
 class CheckCast(Instruction):
 
     def print_instruction(self):
-        log.debug("CHECK-CAST %s v%s" % (self.vA, self.vB))
+        log.debug(self.full_instruction_str)
 
     def fetch(self) -> None:
         self.fmt = 0x112222
@@ -328,12 +344,13 @@ class CheckCast(Instruction):
     def decode(self, fd) -> None:
         super().decode(fd)
         (self.vA, self.vB) = self.decode_args(fd)
+        self.full_instruction_str = f"check-cast {self.vA} v{self.vB}"
 
 
 class InstanceOf(Instruction):
 
     def print_instruction(self):
-        log.debug("INSTANCE-OF v%s v%s @%s" % (self.vA, self.vB, self.vC))
+        log.debug(self.full_instruction_str)
 
     def fetch(self) -> None:
         self.fmt = 0x123333
@@ -341,12 +358,13 @@ class InstanceOf(Instruction):
     def decode(self, fd) -> None:
         super().decode(fd)
         (self.vA, self.vB, self.vC) = self.decode_args(fd)
+        self.full_instruction_str = f"instance-of v{self.vA} v{self.vB} @{self.vC}"
 
 
 class ArrLength(Instruction):
 
     def fetch(self) -> None:
-        self.prefix = "ARRAY-LENGTH"
+        self.prefix = "array-length"
         match self.opcode:
             case 0x21:
                 self.fmt = 0x12
@@ -356,9 +374,10 @@ class ArrLength(Instruction):
     def decode(self, fd) -> None:
         super().decode(fd)
         (self.vA, self.vB) = self.decode_args(fd)
+        self.full_instruction_str = f"array-length v{self.vA} v{self.vB}"
 
     def print_instruction(self):
-        log.debug("%s v%s v%s" % (self.prefix, self.vA, self.vB))
+        log.debug(self.full_instruction_str)
 
     def execute(self, memory, v):
         # account for junk left inside the registers
@@ -383,6 +402,7 @@ class NewInstance(Instruction):
     def decode(self, fd) -> None:
         super().decode(fd)
         (self.vA, self.vB) = self.decode_args(fd)
+        
 
     def print_instruction(self):
         log.debug("%s v%s" % (self.prefix, self.vA))

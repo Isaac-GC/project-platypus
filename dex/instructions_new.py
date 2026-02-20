@@ -101,13 +101,18 @@ class InstructionReturn:
 
 class InstructionBase:
 
-    def __init__(self, opcode):
+    def __init__(self, opcode, dex):
         self.address: int = 0
         self.fmt: int     = 0x0
         self.opcode:int   = opcode
 
         self.prefix: str = "nop"
         self.suffix: str = ""
+
+        self.instruction_str: str = ""
+
+        # Used for dex file reference (annoying, but needed for lookups)
+        self.dex = dex
 
         self.control_flow = ControlFlow.FallThrough
 
@@ -139,6 +144,12 @@ class InstructionBase:
 
     def decode_args(self, fd: BinaryIO):
         return self.decode_args_by_format(self.fmt, fd)
+
+    def print_instruction(self):
+        if self.instruction_str == "":
+            raise NotImplementedError()
+        else:
+            log.debug(self.instruction_str)
 
     def decode_args_by_format(self, fmt: int, fd: BinaryIO):
         decoded_args:  list = []
@@ -218,6 +229,8 @@ class Nop(InstructionBase):
     def decode(self, fd) -> None:
         self.address = fd.tell()
 
+        self.instruction_str = "nop" # This should change when parsing the switch-data/array-data items
+
         # Moved the below to the relevant addresses
         ###################################
 
@@ -246,8 +259,6 @@ class Nop(InstructionBase):
         #         pass # Do nothing as the `fd` address will already be moved and the NOP will already be generated :)
 
 
-    def print_instruction(self):
-        log.debug("nop")
 
     def execute(self, memory, v):
         return super().execute(memory, v)
@@ -278,9 +289,7 @@ class Move(InstructionBase):
         if self.opcode in [0x03, 0x06, 0x09]:
             fd.read(1)
         (self.vA, self.vB) = self.decode_args(fd)
-
-    def print_instruction(self):
-        log.debug("%s%s v%s v%s" % (self.prefix, self.suffix, self.vA, self.vB))
+        self.instruction_str = f"{self.prefix}{self.suffix} v{self.vA} v{self.vB}"
 
     def execute(self, memory, registers):
         if self.opcode not in [0x04, 0x05, 0x06]: # wide instructions
@@ -312,9 +321,7 @@ class MoveResult(InstructionBase):
     def decode(self, fd):
         self.address = fd.tell() - 1
         self.vA = self.decode_args(fd)
-
-    def print_instruction(self):
-        log.debug("%s v%s" % (self.prefix, self.vA))
+        self.instruction_str = f"{self.prefix} v{self.vA}"
 
     def execute(self, memory, registers):
         if self.opcode == 0x0b: # if it's 'move-result-wide'
@@ -352,11 +359,10 @@ class Return(InstructionBase):
         self.address = fd.tell() - 1
         self.vA = self.decode_args(fd)
 
-    def print_instruction(self):
         if self.opcode != 0x0e:
-            log.debug("%s v%s" % (self.prefix, self.vA))
+            self.instruction_str = f"{self.prefix} v{self.vA}"
         else:
-            log.debug("%s" % self.prefix)
+            self.instruction_str = f"{self.prefix}"
 
     def execute(self, memory, registers):
         match self.opcode:
@@ -414,6 +420,7 @@ class Const(InstructionBase):
     def decode(self, fd):
         self.address = fd.tell() - 1
         (self.vA, self.vB) = self.decode_args(fd)
+        self.instruction_str = f"{self.prefix} v{self.vA} {self.vB}"
 
     def print_instruction(self):
         log.debug("%s%s v%s %s" % (self.prefix, self.suffix, self.vA, self.vB))
@@ -454,12 +461,14 @@ class Monitor(InstructionBase):
         self.fmt = 0x11
         self.prefix = "monitor"
 
-    def print_instruction(self):
-        log.debug("monitor-enter/exit %s" % self.vA)
-
     def decode(self, fd):
         self.address = fd.tell() - 1
         self.vA = self.decode_args(fd)
+
+        if self.opcode == 0x1d:
+            self.instruction_str = f"monitor-enter {self.vA}"
+        else:
+            self.instruction_str = f"monitor-exit {self.vA}"
 
 
 class CheckCast(InstructionBase):
@@ -471,9 +480,7 @@ class CheckCast(InstructionBase):
     def decode(self, fd):
         self.address = fd.tell() - 1
         (self.vA, self.vB) = self.decode_args(fd)
-
-    def print_instruction(self):
-        log.debug("check-cast %s v%s" % (self.vA, self.vB))
+        self.instruction_str = f"{self.prefix} {self.vA} v{self.vB}"
 
 
 class InstanceOf(InstructionBase):
@@ -485,9 +492,7 @@ class InstanceOf(InstructionBase):
     def decode(self, fd):
         self.address = fd.tell() - 1
         (self.vA, self.vB, self.vC) = self.decode_args(fd)
-
-    def print_instruction(self):
-        log.debug("instance-of v%s v%s @%s" % (self.vA, self.vB, self.vC))
+        self.instruction_str = f"{self.prefix} v{self.vA} v{self.vB} @{self.vC}"
 
     # def execute(self, memory, registers):
 
@@ -506,9 +511,7 @@ class ArrLength(InstructionBase):
     def decode(self, fd):
         self.address = fd.tell() - 1
         (self.vA, self.vB) = self.decode_args(fd)
-
-    def print_instruction(self):
-        log.debug("%s v%s v%s" % (self.prefix, self.vA, self.vB))
+        self.instruction_str = f"{self.prefix} v{self.vA} v{self.vB}"
 
     def execute(self, memory, registers):
         try:
@@ -530,6 +533,7 @@ class NewInstance(InstructionBase):
     def decode(self, fd):
         self.address = fd.tell() - 1
         (self.vA, self.vB) = self.decode_args(fd)
+        self.instruction_str = f"{self.prefix} v{self.vA}"
 
     def print_instruction(self):
         log.debug("%s v%s" % (self.prefix, self.vA))
@@ -565,14 +569,18 @@ class Array(InstructionBase):
     def decode(self, fd):
         self.address = fd.tell() - 1
 
+        # TODO: Validate that these are properly parsing the instructions
         match self.opcode:
-            case 0x23:
+            case 0x23: # new-array
                 (self.vA, self.vB, self.vC) = self.decode_args(fd)
-            case 0x24:
+                self.instruction_str = f"{self.prefix} v{self.vA} v{self.vB} @{hex(self.vC)}"
+            case 0x24: # filled-new-array
                 (self.vA, self.vG, self.vB, self.vF, self.vE, self.vD, self.vC) = self.decode_args(fd)
-            case 0x25:
+                self.instruction_str = f"{self.prefix} v{self.vA} v{self.vB} @{hex(self.vC)}"
+
+            case 0x25: # filled-new-array/range
                 (self.vA, self.vB, self.vC) = self.decode_args(fd)
-            case 0x26:
+            case 0x26: # fill-array-data
                 (self.vA, self.vB) = self.decode_args(fd)
 
     def print_instruction(self):
@@ -589,7 +597,7 @@ class Array(InstructionBase):
         match self.opcode:
             case 0x23:
                 new_array = []
-                try: # Checking to make sure whats in vB is actually a num
+                try: # Checking to make sure what's in vB is actually a num
                     new_array = [0 for i in range(registers[self.vB])]
                 except TypeError as te:
                     log.error(f"TypeError: {te}")
@@ -600,7 +608,7 @@ class Array(InstructionBase):
                 new_array = []
                 given_type = memory.dex.type_ids[self.vB].type_name
 
-                try:  # Checking to make sure whats in vB is actually a num
+                try:  # Checking to make sure what's in vB is actually a num
                     if "String" in given_type:
                         new_array = ["" for i in range(registers[self.vB])]
 

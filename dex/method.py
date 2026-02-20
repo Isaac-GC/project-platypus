@@ -157,8 +157,8 @@ class Method:
             case 0x00:
                 # The other payload formats have been put under the relevant instructions rather than under "NOP"
                 # includes: 0x0100, 0x0200, 0x0300
-                return Nop(opcode)
-            case opcode if 0x01 <= opcode <= 0x09: return Move(opcode)
+                return Nop(opcode, self.dex)
+            case opcode if 0x01 <= opcode <= 0x09: return Move(opcode, self.dex)
             case opcode if 0x0a <= opcode <= 0x0d: return MoveResult(opcode)
             case opcode if 0x0e <= opcode <= 0x11: return Return(opcode)
             case opcode if 0x12 <= opcode <= 0x1c: return Const(opcode)

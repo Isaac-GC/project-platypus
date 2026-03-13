@@ -9,8 +9,18 @@ Please note: This is in the testing phase so options may be limited and you will
 
 ### Intention
 
-No AI code generation will be used to generate the underlying code (only caveat would be with helping generate tests for
-the classes as I hate the tediousness at building out tests). Additionally, there **will not** be *any* AI/LLM/ML
+This is intended to allow for a somewhat hybrid crossover between static and dynamic analysis for Android applications. While its still
+very much in a heavy "work-in-progress" state → the release of it will allow for semiautomated code analysis. 
+
+What can it be used for? 
+- CI/CD tests _after_ compilation (code shouldn't but sometimes does act different after being fully compiled)
+- Reverse Engineering
+
+
+### AI stuffs
+
+No AI code generation will be used to generate the underlying code (only exception would be with helping generate tests for
+the classes as I hate the tediousness of building out tests). Additionally, there **will not** be *any* AI/LLM/ML
 \*shenanigans\* happening with decompiling, reversing, and rehydrating the code. 
 
 Why no AI/LLM stuffs? → While it *kinda* does work, the results are not 100% reproducible, meaning that what you see and what I see 
@@ -49,6 +59,7 @@ tentative plans to build an application/tool that allows this tool to bridge and
   - [ ] Ensure instructions are being parsed properly
 - [ ] Expand coverage to allow loading of ELF/DWARF binaries
   - [ ] Emulate JNI capabilities
+  - [ ] Support UI presentation
  
 ---
 

@@ -267,8 +267,8 @@ class Move(InstructionBase):
 
     def fetch(self) -> None:
         obj_type = ["", "-wide", "-object"]
-        suffix_iter = self.opcode % 3
-        self.prefix = f"move{obj_type[self.opcode % 3]}"
+        suffix_iter = (self.opcode // 3) % 3 # A value should not be larger than 2 in this
+        self.prefix = f"move{obj_type[suffix_iter]}"
 
         match self.opcode:
             case 0x01 | 0x04 | 0x07:
@@ -698,8 +698,8 @@ class Goto(InstructionBase):
 
 class Switch(InstructionBase):
 
-    def __init__(self, opcode):
-        super().__init__(opcode)
+    def __init__(self, opcode, dex):
+        super().__init__(opcode, dex)
         self.switch_table = {}
 
     def fetch(self) -> None:
@@ -1298,30 +1298,30 @@ class BinOp2Addr(InstructionBase):
         log.debug("%s-%s/2addr v%s v%s" % (self.prefix, self.suffix, self.vA, self.vB))
 
     def execute(self, memory, registers):
+        a = None
         b = None
-        c = None
 
         match self.operand_type:
             case 0x0: # int
+                a = registers[self.vA]
                 b = registers[self.vB]
-                c = registers[self.vC]
 
             case 0x1: # long
-                b = (registers[self.vB] << 32) or registers[self.vB + 1]
+                b = (registers[self.vA] << 32) or registers[self.vA + 1]
 
                 # "two and one" register value retrieval edge case
                 if self.operator_type in [0x8, 0x9, 0xa]: # shl, shr, ushr
-                    c = registers[self.vC]
+                    c = registers[self.vB]
                 else:
-                    c = (registers[self.vB] << 32) or registers[self.vB + 1]
+                    c = (registers[self.vA] << 32) or registers[self.vA + 1]
 
             case 0x2 | 0x3: # float or double
-                b = (registers[self.vB] << 32) or registers[self.vB + 1]
-                c = (registers[self.vB] << 32) or registers[self.vB + 1]
+                b = (registers[self.vA] << 32) or registers[self.vA + 1]
+                c = (registers[self.vA] << 32) or registers[self.vA + 1]
 
 
         try:
-            a = reg_ops_helper(self.operator_type, self.operand_type, b, c)
+            a = reg_ops_helper(self.operator_type, self.operand_type, a, b)
         except ZeroDivisionError as zde:
             a = 0
 

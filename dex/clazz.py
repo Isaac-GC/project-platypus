@@ -9,7 +9,7 @@ from dex.field import Field
 from dex.method import Method
 from vm.utils import LogHandler
 
-from vlq_base128_le import VlqBase128Le
+from dex.vlq_base128_le import VlqBase128Le
 
 handler = LogHandler()
 log = logging.getLogger(__name__)

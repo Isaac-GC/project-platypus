@@ -20,10 +20,12 @@ class InstructionReturn:
 # TODO: Add capability to actually get a string formatted version of the instruction rather than just log it (used for smali code)
 class Instruction:
 
-    def __init__(self, opcode):
+    def __init__(self, opcode, dex):
         self.fmt: int = 0x0
         self.prefix: str = "NOP"
         self.suffix: str = ""
+
+        self.dex = dex
 
         # sets the full instruction string to be used as smali (later) or log output
         self.full_instruction_str = ""
@@ -402,7 +404,7 @@ class NewInstance(Instruction):
     def decode(self, fd) -> None:
         super().decode(fd)
         (self.vA, self.vB) = self.decode_args(fd)
-        
+
 
     def print_instruction(self):
         log.debug("%s v%s" % (self.prefix, self.vA))

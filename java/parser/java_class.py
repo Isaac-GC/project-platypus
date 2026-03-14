@@ -17,7 +17,7 @@ def decode_modified_utf8(s: bytes) -> str:
     4.4.7 of the JVM specification.
 
     :param s: bytestring to be converted.
-    :returns: A unicode representation of the original string.
+    :returns: A Unicode representation of the original string.
     """
     s_out = []
     s_len = len(s)

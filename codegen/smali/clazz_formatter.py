@@ -18,3 +18,4 @@ class SmaliClazz:
         self.children.sort(key=lambda c: c.name) # Sort by name in alphabetic order
 
 
+

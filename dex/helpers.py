@@ -39,7 +39,9 @@ def logical_lshift(signed_integer, places, num_bits=32):
     unsigned_integer = signed_integer % (1 << num_bits)
     return unsigned_integer << places
 
-
+def sign_extend(value: int, bits: int):
+    sign_bit = 1 << (bits - 1)
+    return (value & (sign_bit - 1)) - (value & sign_bit)
 
 def alu_op(op: int, operand: int, b: int, c: int):
     # TODO: disable this pokemon and start fixing bugs

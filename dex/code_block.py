@@ -1,3 +1,4 @@
+import enum
 import logging
 
 from vm.utils import LogHandler
@@ -7,7 +8,19 @@ log = logging.getLogger(__name__)
 log.addHandler(handler)
 log.setLevel(logging.DEBUG)
 
+class BasicBlockType(enum.Enum):
+    RETURN = 0
+    THROW  = 1
+    GOTO   = 2
+    IF     = 3
 
+
+class BasicBlock:
+    def __init__(self):
+        self.instructions = []
+        self.next_branch = None # (If it branches off)
+        self.block_type = BasicBlockType
+        self.instr_idx_start = 0
 
 class CodeBlock:
     """
@@ -21,51 +34,59 @@ class CodeBlock:
         'code_item' Reference: https://source.android.com/docs/core/runtime/dex-format#code-item
     """
 
-    def __init__(self, containing_method):
+    def __init__(self, code_item):
         self.blocks = []
-        self.containing_method = containing_method
+        self.code_item = code_item
         self.addr_lookup = {}
 
     def build_code_flow(self):
         # 'instr_size' should cover this, but just to be safe, we'll do an extra check
-        instr_ref = self.containing_method.instructions
-        # self.addr_lookup = { instr.address: idx for idx, instr in enumerate(instr_ref) }
+        instr_ref = self.code_item.instructions
 
-        # if self.containing_method.clazz_name == "Lhivhi/wfg;":
-        #     if self.containing_method.method_name == "bihvbhi":
-        #         log.setLevel(logging.DEBUG)
-        # else:
-        #     log.setLevel(logging.INFO)
+        num_instrs = len(instr_ref)
+        if num_instrs != 0:
+            idx = 0
+            while idx < num_instrs:
+                (block, i) = self.__build_basic_block(idx)
+                self.blocks.append(block)
+                idx += i
 
-        basic_block = BasicBlock()
-        if len(instr_ref) != 0:
-            for idx, instr in enumerate(instr_ref):
-                # log.debug(f"Adding instruction {instr.prefix}")
 
-                match instr.opcode:
+    def __build_basic_block(self, start_idx: int):
+        block = BasicBlock()
+        block.instr_idx_start = start_idx
+        idx = start_idx
 
-                    case opcode if 0xe <= opcode <= 0x11: # Return statements
-                        self.blocks.append(basic_block)
-                        basic_block = BasicBlock()
-                        basic_block.instr_idx_start = idx + 1 # (Next Instruction)
 
-                    case opcode if opcode == 0x27: # Throw statement
-                        self.blocks.append(basic_block)
-                        basic_block = BasicBlock()
-                        basic_block.instr_idx_start = idx + 1 # (Next Instruction)
+        # TODO: This is backwards, a basic block should *start* with the following items, not end with them
+        for instr in self.code_item.instructions:
+            block.instructions.append(instr)
+            idx += 1
+            match instr.opcode:
+                case opcode if 0xe <= opcode <= 0x11:  # Return statements
+                    block.block_type = BasicBlockType.RETURN
+                    # return doesn't need to go to another branch, just exit
+                    return block, idx
 
-                    case opcode if 0x28 <= opcode <= 0x2a: # GoTo Statement
-                        self.blocks.append(basic_block)
-                        basic_block = BasicBlock()
-                        basic_block.instr_idx_start = idx + 1 # (Next Instruction)
+                case opcode if opcode == 0x27:  # Throw statement
+                    block.block_type = BasicBlockType.THROW
+                    # Should end the run
+                    return block, idx
 
-                    case opcode if 0x32 <= opcode <= 0x3d: # If statements
-                        self.blocks.append(basic_block)
-                        basic_block = BasicBlock()
-                        basic_block.instr_idx_start = idx + 1 # (Next Instruction)
+                case opcode if 0x28 <= opcode <= 0x2a:  # GoTo Statement
+                    block.block_type = BasicBlockType.GOTO
+                    block.next_branch = instr.vB
+                    return block, idx
 
-                    case _:
-                        basic_block.instructions.append(instr)
+                case opcode if 0x32 <= opcode <= 0x3d:  # If statements
+                    block.block_type = BasicBlockType.IF
+                    if opcode < 0x38: # Normal if statement
+                        block.next_branch = instr.vC
+                    else: # If-zero type statements
+                        block.next_branch = instr.vB
+                    return block, idx
+
+        return block, idx  # This should NEVER occur
 
 
     def lookup_codeblock_by_idx_offset(self, idx: int):
@@ -73,14 +94,6 @@ class CodeBlock:
             if block.instr_idx_start == idx:
                 return block
         return None
-
-
-class BasicBlock:
-    def __init__(self):
-        self.instructions = []
-        self.next_branch = None # (If it branches off)
-        self.instr_idx_start = 0
-
 
 
 

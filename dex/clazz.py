@@ -6,7 +6,7 @@ from dex.access_flags import Class_AccessFlags
 from dex.annotation import Annotation
 from dex.dex import Dex
 from dex.field import Field
-from dex.method import Method
+from dex.method import Method, MethodType
 from vm.utils import LogHandler
 
 from dex.vlq_base128_le import VlqBase128Le
@@ -70,7 +70,7 @@ class Clazz:
             else:
                 curr_idx += virtual_method.method_idx_diff.value
 
-            self.methods.append(Method(curr_idx, virtual_method, self.dex))
+            self.methods.append(Method(curr_idx, virtual_method, MethodType.VIRTUAL, self.dex))
 
         curr_idx = 0
         for direct_method in self.class_data.direct_methods:
@@ -79,7 +79,7 @@ class Clazz:
             else:
                 curr_idx += direct_method.method_idx_diff.value
 
-            self.methods.append(Method(curr_idx, direct_method, self.dex))
+            self.methods.append(Method(curr_idx, direct_method, MethodType.DIRECT, self.dex))
 
     def __parse_fields(self):
         curr_idx = 0

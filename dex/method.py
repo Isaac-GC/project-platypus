@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import enum
 import logging
 from typing import BinaryIO
 
+from fontTools.ttLib.tables.ttProgram import instructions
 from kaitaistruct import KaitaiStream
 
 import dex.instructions
@@ -22,6 +24,11 @@ log = logging.getLogger(__name__)
 log.addHandler(handler)
 log.setLevel(logging.DEBUG)
 
+class MethodType(enum.Enum):
+    VIRTUAL = 0
+    DIRECT = 1
+
+
 def parse_access_flags(raw_access_flags):
     print(f"Starting aflag: {raw_access_flags}")
     parsed_access_flags = []
@@ -36,10 +43,11 @@ def parse_access_flags(raw_access_flags):
 
 
 class Method:
-    def __init__(self, curr_idx: int, e_method: Dex.EncodedMethod, dex):
+    def __init__(self, curr_idx: int, e_method: Dex.EncodedMethod, method_type: MethodType, dex):
         self.dex = dex
         self.fd = dex.fd
         self.encoded_method = e_method
+        self.method_type = method_type
 
         self.mthd_idx = curr_idx
 
@@ -122,17 +130,36 @@ class Method:
         # log.debug(msg)
 
     def __parse_instructions(self):
-        # Have to keep this like the below until the Instructions class can be rewritten
-        while (self.fd.tell() - self.method_entrypoint_address) < self.instr_size * 2:
+        insns_start_offset = self.fd.tell()
+        codepoint = 0
+
+        while codepoint < self.instr_size:
             instruction = self.__parse_single_instruction()
 
+            # Safety check
             if not instruction:
                 break
 
             instruction.fetch()
             instruction.decode(self.fd)
+
             self.instructions.append(instruction)
+            # instruction.code_block = codepoint
+            codepoint = instruction.codepoint + instruction.width
             instruction.print_instruction()
+
+
+        # Have to keep this like the below until the Instructions class can be rewritten
+        # while (self.fd.tell() - self.method_entrypoint_address) < self.instr_size * 2:
+        #     instruction = self.__parse_single_instruction()
+        #
+        #     if not instruction:
+        #         break
+        #
+        #     instruction.fetch()
+        #     instruction.decode(self.fd)
+        #     self.instructions.append(instruction)
+        #     instruction.print_instruction()
 
 
     def __build_code_blocks(self):

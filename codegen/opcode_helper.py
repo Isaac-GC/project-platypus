@@ -1,5 +1,4 @@
 from dex.helpers import sign_extend
-from dex.instructions_new import InstructionBase
 
 # Code units (based off of Dex bytecode format) --> https://source.android.com/docs/core/runtime/instruction-formats
 OPCODE_WIDTH = {
@@ -320,7 +319,7 @@ def get_opcode_width(opcode: int) -> int:
         raise ValueError(f"Unknown opcode '{opcode}' and not found in the OPCODE_WIDTH table")
     return OPCODE_WIDTH[opcode]
 
-def resolve_branch_target(instr: InstructionBase) -> int:
+def resolve_branch_target(instr) -> int:
     op   = instr.opcode
     bits = BRANCH_OFFSET_BITS[op]
     idx  = BRANCH_OFFSET_IDX[op]

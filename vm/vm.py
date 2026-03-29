@@ -78,10 +78,7 @@ class VM:
                 print(f"{indent} ↳ {self.get_fqfn(m_id)}")
 
 
-    def lookup_method(self, method_signature):
-        (clazz, mthd, args, ret_vals) = self.parse_method(method_signature)
-        # print(f"Found\n  Class: {clazz},  Method: {mthd}")
-
+    def _check_clazz_name_fmt(self, clazz: str):
         # Trim/fix the class name
         if clazz[0] != "L":
             clazz = clazz[1:]
@@ -90,6 +87,18 @@ class VM:
             clazz = clazz[:-1]
             # log.debug(f"Adding ';' item to class {clazz}")
 
+        return clazz
+
+    def get_clazz(self, clazz_name: str):
+        clazz = self._check_clazz_name_fmt(clazz_name)
+        if clazz in self.lookup_map:
+            return self.lookup_map[clazz]['clazz']
+        return None
+
+    def lookup_method(self, method_signature):
+        (clazz, mthd, args, ret_vals) = self.parse_method(method_signature)
+        # print(f"Found\n  Class: {clazz},  Method: {mthd}")
+        clazz = self._check_clazz_name_fmt(clazz)
 
         log.debug(f"Looking up class: {clazz} and {mthd}")
         # print(self.lookup_map)

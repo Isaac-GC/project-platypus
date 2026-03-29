@@ -9,6 +9,7 @@ import signal
 
 from rich.console import Console
 
+from codegen.smali.smali_generator import SmaliCodeGen, SmaliClassCodeGen
 from multidex_vm import MultiDexVM
 from target_helpers import TargetClass
 from vm.utils import LogHandler
@@ -83,18 +84,24 @@ def run_dalvik_vm(target_apk: APK, target_method: str, target_method_args: Optio
     method_exists = vm.lookup_method('Lkotlin/jvm/internal/Intrinsics;->fi')
     log.debug(f"Method exists: {False if method_exists is None else method_exists}")
     method = vm.lookup_method(target_method)
+
+    containing_clazz = vm.get_clazz(method.clazz_name)
+
+    method_smali = SmaliClassCodeGen(containing_clazz)
+    print(method_smali.format())
+
     # log.debug(f"Calling: {method.clazz_name}->{method.method_name}")
 
-    x = 0
-    for clazz in vm.lookup_map.keys():
-        for _ in vm.lookup_map[clazz]:
-            x += 1
+    # x = 0
+    # for clazz in vm.lookup_map.keys():
+    #     for _ in vm.lookup_map[clazz]:
+    #         x += 1
+    #
+    # log.debug(f"[+] A total of {x} methods were added")
 
-    log.debug(f"[+] A total of {x} methods were added")
-
-    if method:
-        ret_val = vm.call_method(method, target_method_args)
-        print(ret_val)
+    # if method:
+    #     ret_val = vm.call_method(method, target_method_args)
+    #     print(ret_val)
 
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
 import enum
 import logging
+from typing import Optional
 
 from vm.utils import LogHandler
 
@@ -9,18 +10,56 @@ log.addHandler(handler)
 log.setLevel(logging.DEBUG)
 
 class BasicBlockType(enum.Enum):
-    RETURN = 0
-    THROW  = 1
-    GOTO   = 2
-    IF     = 3
+    RETURN  = 0
+    THROW   = 1
+    GOTO    = 2
+    IF      = 3
+    SWITCH  = 4
+    GENERIC = 5
+
+class EdgeKind(enum.Enum):
+    FALL_THROUGH = 0
+    JUMP         = 1
+    EXCEPTION    = 2
+    SWITCH       = 3
+
+class CFGEdge:
+    def __init__(self,
+                 source: 'BasicBlock',
+                 target: 'BasicBlock',
+                 kind: EdgeKind,
+                 switch_key: Optional[int] = None):
+
+        self.source = source
+        self.target = target
+        self.kind   = kind
+        self.switch_key = switch_key
 
 
 class BasicBlock:
     def __init__(self):
-        self.instructions = []
-        self.next_branch = None # (If it branches off)
-        self.block_type = BasicBlockType
+        # For the VM
+        self.instructions: list = []
+        self.next_branch: Optional[int] = None # (If it branches off)
+        self.block_type: BasicBlockType = BasicBlockType.GENERIC
         self.instr_idx_start = 0
+
+        # CFG
+        self.id = 0
+        self.successors:   list[CFGEdge] = []
+        self.predecessors: list[CFGEdge] = []
+
+        # Dominator fields
+        self.dominator: Optional['BasicBlock'] = None
+        self.dom_children: list = []
+        self.dom_frontier: list = []
+
+        self.loop_header: bool      = False
+        self.loop: Optional[object] = None
+        self.ssa_defs: dict         = {}
+
+    @property
+    def first_codepoint
 
 class CodeBlock:
     """

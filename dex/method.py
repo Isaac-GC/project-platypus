@@ -13,7 +13,7 @@ from dex.code_block import CodeBlock
 
 from dex.instructions_new import *
 
-from dex.access_flags import Method_AccessFlags
+from dex.access_flags import Method_AccessFlags, parse_method_access_flags
 from dex.dex import Dex
 from dex.helpers import b2i
 
@@ -22,24 +22,11 @@ from vm.utils import LogHandler
 handler = LogHandler()
 log = logging.getLogger(__name__)
 log.addHandler(handler)
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
 
 class MethodType(enum.Enum):
     VIRTUAL = 0
     DIRECT = 1
-
-
-def parse_access_flags(raw_access_flags):
-    print(f"Starting aflag: {raw_access_flags}")
-    parsed_access_flags = []
-    for aflag in Method_AccessFlags:
-        if raw_access_flags and isinstance(raw_access_flags, int):
-            if aflag.value & raw_access_flags:
-                parsed_access_flags.append(aflag)
-                raw_access_flags -= aflag.value
-                print(f"a_flags: {parsed_access_flags}, raw_flag: {raw_access_flags}")
-
-    return parsed_access_flags
 
 
 class Method:
@@ -58,7 +45,8 @@ class Method:
         self.return_type = ""
         self.annotations = []
         self.param_annotations = []
-        self.access_flags = e_method.access_flags if type(e_method.access_flags) else parse_access_flags(e_method.access_flags)
+
+        self.access_flags = parse_method_access_flags(e_method.access_flags)
         # self.access_flags = get_method_access_flags(e_method.access_flags)
 
         self.code_offset_val = self.encoded_method.code_off.value
@@ -100,7 +88,6 @@ class Method:
             # Should be last so that anything with setting the tries doesn't get messed up
             self.__build_code_blocks()
 
-
     def execute_method(self, memory):
         for instruction in self.instructions:
             instruction.execute(memory, self.registers)
@@ -134,6 +121,19 @@ class Method:
         codepoint = 0
 
         while codepoint < self.instr_size:
+            expected_byte_offset = insns_start_offset + (codepoint * 2)
+            actual_byte_offset = self.fd.tell()
+
+            if actual_byte_offset != expected_byte_offset:
+                log.error(
+                    f"fd misaligned at codepoint {codepoint:#x}: "
+                    f"expected byte offset {expected_byte_offset:#x}, "
+                    f"got {actual_byte_offset:#x} "
+                    f"(delta: {actual_byte_offset - expected_byte_offset:+d} bytes)"
+                )
+
+                self.fd.seek(expected_byte_offset + 1)
+
             instruction = self.__parse_single_instruction()
 
             # Safety check
@@ -141,11 +141,38 @@ class Method:
                 break
 
             instruction.fetch()
+
+            before = self.fd.tell()
             instruction.decode(self.fd)
+            after = self.fd.tell()
+
+            consumed = after - before
+            expected_consumed = (instruction.width * 2) - 1  # minus 1 for already-read opcode
+
+            if consumed != expected_consumed:
+                log.error(
+                    f"BYTE MISMATCH cp={codepoint:#04x} "
+                    f"op={instruction.opcode:#04x} "
+                    f"fmt={instruction.fmt!r} "
+                    f"width={instruction.width} "
+                    f"consumed={consumed} "
+                    f"expected={expected_consumed}"
+                )
+
+            # instruction.decode(self.fd)
+            instruction.codepoint = codepoint
+
+            log.debug(
+                f"  cp={codepoint:#04x} "
+                f"op={instruction.opcode:#04x} "
+                f"fmt={instruction.fmt!r} "
+                f"width={instruction.width} "
+                f"str={instruction.instruction_str!r}"
+            )
 
             self.instructions.append(instruction)
             # instruction.code_block = codepoint
-            codepoint = instruction.codepoint + instruction.width
+            codepoint += instruction.width
             instruction.print_instruction()
 
 
@@ -186,36 +213,36 @@ class Method:
                 # includes: 0x0100, 0x0200, 0x0300
                 return Nop(opcode, self.dex)
             case opcode if 0x01 <= opcode <= 0x09: return Move(opcode, self.dex)
-            case opcode if 0x0a <= opcode <= 0x0d: return MoveResult(opcode)
-            case opcode if 0x0e <= opcode <= 0x11: return Return(opcode)
-            case opcode if 0x12 <= opcode <= 0x1c: return Const(opcode)
-            case opcode if 0x1d <= opcode <= 0x1e: return Monitor(opcode)
+            case opcode if 0x0a <= opcode <= 0x0d: return MoveResult(opcode, self.dex)
+            case opcode if 0x0e <= opcode <= 0x11: return Return(opcode, self.dex)
+            case opcode if 0x12 <= opcode <= 0x1c: return Const(opcode, self.dex)
+            case opcode if 0x1d <= opcode <= 0x1e: return Monitor(opcode, self.dex)
 
-            case opcode if opcode == 0x1f: return CheckCast(opcode)
-            case opcode if opcode == 0x20: return InstanceOf(opcode)
-            case opcode if opcode == 0x21: return ArrLength(opcode)
-            case opcode if opcode == 0x22: return NewInstance(opcode)
+            case opcode if opcode == 0x1f: return CheckCast(opcode, self.dex)
+            case opcode if opcode == 0x20: return InstanceOf(opcode, self.dex)
+            case opcode if opcode == 0x21: return ArrLength(opcode, self.dex)
+            case opcode if opcode == 0x22: return NewInstance(opcode, self.dex)
 
-            case opcode if 0x23 <= opcode <= 0x26: return Array(opcode)
+            case opcode if 0x23 <= opcode <= 0x26: return Array(opcode, self.dex)
 
-            case opcode if opcode == 0x27: return Throw(opcode)
+            case opcode if opcode == 0x27: return Throw(opcode, self.dex)
 
-            case opcode if 0x28 <= opcode <= 0x2a: return Goto(opcode)
-            case opcode if 0x2b <= opcode <= 0x2c: return Switch(opcode)
-            case opcode if 0x2d <= opcode <= 0x31: return Cmp(opcode)
-            case opcode if 0x32 <= opcode <= 0x37: return If(opcode)
-            case opcode if 0x38 <= opcode <= 0x3d: return IfZ(opcode)
-            case opcode if 0x44 <= opcode <= 0x51: return ArrayOp(opcode)
-            case opcode if 0x52 <= opcode <= 0x58: return IGet(opcode)
-            case opcode if 0x59 <= opcode <= 0x5f: return IPut(opcode)
-            case opcode if 0x60 <= opcode <= 0x66: return SGet(opcode)
-            case opcode if 0x67 <= opcode <= 0x6d: return SPut(opcode)
-            case opcode if 0x6e <= opcode <= 0x72: return InvokeKind(opcode)
-            case opcode if 0x74 <= opcode <= 0x78: return InvokeKindRange(opcode)
-            case opcode if 0x7b <= opcode <= 0x8f: return UnOp(opcode)
-            case opcode if 0x90 <= opcode <= 0xaf: return BinOp(opcode)
-            case opcode if 0xb0 <= opcode <= 0xcf: return BinOp2Addr(opcode)
-            case opcode if 0xd0 <= opcode <= 0xe2: return BinOpLit(opcode)
+            case opcode if 0x28 <= opcode <= 0x2a: return Goto(opcode, self.dex)
+            case opcode if 0x2b <= opcode <= 0x2c: return Switch(opcode, self.dex)
+            case opcode if 0x2d <= opcode <= 0x31: return Cmp(opcode, self.dex)
+            case opcode if 0x32 <= opcode <= 0x37: return If(opcode, self.dex)
+            case opcode if 0x38 <= opcode <= 0x3d: return IfZ(opcode, self.dex)
+            case opcode if 0x44 <= opcode <= 0x51: return ArrayOp(opcode, self.dex)
+            case opcode if 0x52 <= opcode <= 0x58: return IGet(opcode, self.dex)
+            case opcode if 0x59 <= opcode <= 0x5f: return IPut(opcode, self.dex)
+            case opcode if 0x60 <= opcode <= 0x66: return SGet(opcode, self.dex)
+            case opcode if 0x67 <= opcode <= 0x6d: return SPut(opcode, self.dex)
+            case opcode if 0x6e <= opcode <= 0x72: return InvokeKind(opcode, self.dex)
+            case opcode if 0x74 <= opcode <= 0x78: return InvokeKindRange(opcode, self.dex)
+            case opcode if 0x7b <= opcode <= 0x8f: return UnOp(opcode, self.dex)
+            case opcode if 0x90 <= opcode <= 0xaf: return BinOp(opcode, self.dex)
+            case opcode if 0xb0 <= opcode <= 0xcf: return BinOp2Addr(opcode, self.dex)
+            case opcode if 0xd0 <= opcode <= 0xe2: return BinOpLit(opcode, self.dex)
             case opcode if 0xe3 <= opcode <= 0xf9: pass
 
             case opcode if 0xfa: pass # invoke-polymorphic (not implemented yet)

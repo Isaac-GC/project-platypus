@@ -1,3 +1,5 @@
+from dex.dexfile import CallSiteCache
+
 
 class Memory:
     """
@@ -15,6 +17,8 @@ class Memory:
         self.method_instr_values = {}
         self.static_fields = {}
         self.instance_fields = {}
+
+        self.call_site_cache = CallSiteCache()
 
         self.dex = dex
         self.fd = fd

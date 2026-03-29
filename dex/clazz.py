@@ -2,7 +2,7 @@ import enum
 import logging
 from typing import BinaryIO
 
-from dex.access_flags import Class_AccessFlags
+from dex.access_flags import Class_AccessFlags, parse_clazz_access_flags
 from dex.annotation import Annotation
 from dex.dex import Dex
 from dex.field import Field
@@ -15,18 +15,6 @@ handler = LogHandler()
 log = logging.getLogger(__name__)
 log.addHandler(handler)
 log.setLevel(logging.DEBUG)
-
-def parse_access_flags(raw_access_flags):
-    print(f"Starting aflag: {raw_access_flags}")
-    parsed_access_flags = []
-    for aflag in Class_AccessFlags:
-        if raw_access_flags and isinstance(raw_access_flags, int):
-            if aflag.value & raw_access_flags:
-                parsed_access_flags.append(aflag)
-                raw_access_flags -= aflag.value
-                print(f"a_flags: {parsed_access_flags}, raw_flag: {raw_access_flags}")
-
-    return parsed_access_flags
 
 
 class Clazz:
@@ -43,10 +31,7 @@ class Clazz:
         self.instance_fields = []
         self.annotations = []
 
-        self.access_flags = class_def.access_flags if type(class_def.access_flags) else parse_access_flags(class_def.access_flags)
-        # print(f"\nCalling class name: {self.class_name}\nAccess Flags: {self.access_flags}")
-        # if len(self.access_flags) == 0:
-        #     parse_access_flags(class_def.access_flags)
+        self.access_flags = parse_clazz_access_flags(class_def.access_flags)
 
         # Sometimes but not always present
         self.superclass = None

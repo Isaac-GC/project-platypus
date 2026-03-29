@@ -17,6 +17,19 @@ log = logging.getLogger(__name__)
 log.addHandler(handler)
 log.setLevel(logging.DEBUG)
 
+class CallSiteCache:
+    def __init__(self):
+        self._cache: dict[int, object] = {}
+
+    def get(self, idx: int):
+        return self._cache.get(idx)
+
+    def put(self, idx: int, method_handle):
+        self._cache[idx] = method_handle
+
+    def is_resolved(self, idx: int):
+        return idx in self._cache
+
 class CallSiteItem:
     def __init__(self):
         self.method_handle_idx: int
@@ -95,7 +108,7 @@ class DexFile:
     def __build_lookup_map(self):
         for clazz in self.clazzes:
             if clazz.class_name not in self.lookup_map:
-                clazz_data = {}
+                clazz_data = { 'clazz': clazz }
                 for mthd in clazz.methods:
                     self.lookup_by_id_map[mthd.mthd_idx] = mthd
                     if mthd.method_name not in clazz_data:

@@ -834,16 +834,16 @@ class Switch(InstructionBase):
         self._build_operands()
 
     def execute(self, memory, registers):
-        found_switch_branch = False
-        ret = 1
-        for value, offset in self.switch_table.items():
-            if registers[self.vA] == value:
-                ret = self.address + offset + 2
-                found_switch_branch = True
+        val = registers[self.vA]
+        if val in self.switch_table:
+            rel    = self.switch_table[val]
+            target = self.codepoint + rel
+            memory.last_exception = target
+            return target
 
-        if found_switch_branch:
-            memory.last_return = ret
-
+        # if no match, fall through
+        memory.last_return = None
+        return None
 
 class Cmp(InstructionBase):
 
@@ -914,35 +914,21 @@ class If(InstructionBase):
 
 
     def execute(self, memory, registers):
-        ret = 1
-
+        taken = False
         if registers[self.vA] and registers[self.vB]:
             match self.opcode:
-                case 0x32:
-                    if registers[self.vA] == registers[self.vB]:
-                        ret = self.vC
+                case 0x32: taken = registers[self.vA] == registers[self.vB]
+                case 0x33: taken = registers[self.vA] != registers[self.vB]
+                case 0x34: taken = registers[self.vA] < registers[self.vB]
+                case 0x35: taken = registers[self.vA] >= registers[self.vB]
+                case 0x36: taken = registers[self.vA] > registers[self.vB]
+                case 0x37: taken = registers[self.vA] <= registers[self.vB]
 
-                case 0x33:
-                    if registers[self.vA] != registers[self.vB]:
-                        ret = self.vC
-
-                case 0x34:
-                    if registers[self.vA] < registers[self.vB]:
-                        ret = self.vC
-
-                case 0x35:
-                    if registers[self.vA] >= registers[self.vB]:
-                        ret = self.vC
-
-                case 0x36:
-                    if registers[self.vA] > registers[self.vB]:
-                        ret = self.vC
-
-                case 0x37:
-                    if registers[self.vA] <= registers[self.vB]:
-                        ret = self.vC
-
-        memory.last_return = ret
+        if taken:
+            target = self.codepoint + sign_extend(self.vC, 16)
+            memory.last_return = target
+        else:
+            memory.last_return = None
 
 class IfZ(InstructionBase):
 
@@ -968,29 +954,22 @@ class IfZ(InstructionBase):
         self._build_operands()
 
     def execute(self, memory, registers):
-        ret = 1
+        val = registers[self.vA]
+        taken = False
         if registers[self.vA]:
             match self.opcode:
-                case 0x38:
-                    if registers[self.vA] == 0:
-                        ret = self.vB
-                case 0x39:
-                    if registers[self.vA] != 0:
-                        ret = self.vB
-                case 0x3a:
-                    if registers[self.vA] < 0:
-                        ret = self.vB
-                case 0x3b:
-                    if registers[self.vA] >= 0:
-                        ret = self.vB
-                case 0x3c:
-                    if registers[self.vA] > 0:
-                        ret = self.vB
-                case 0x3d:
-                    if registers[self.vA] <= 0:
-                        ret = self.vB
+                case 0x38: taken = val == 0
+                case 0x39: taken = val != 0
+                case 0x3a: taken = val < 0
+                case 0x3b: taken = val >= 0
+                case 0x3c: taken = val > 0
+                case 0x3d: tkane = val <= 0
 
-            memory.last_return = ret
+        if taken:
+            target = self.codepoint + sign_extend(self.vB, 16)
+            memory.last_return = target
+        else:
+            memory.last_return = None
 
 
 class ArrayOp(InstructionBase):

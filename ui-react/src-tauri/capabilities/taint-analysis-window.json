@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/capabilities.schema.json",
+  "identifier": "taint-analysis-window",
+  "description": "Permissions for the taint analysis window",
+  "windows": ["taint"],
+  "permissions": [
+    "core:default",
+    "core:event:default"
+  ]
+}

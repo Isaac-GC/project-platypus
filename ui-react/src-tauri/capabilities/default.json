@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/capabilities.schema.json",
+  "identifier": "default",
+  "description": "Default permissions for the main Project Platypus window. Sub-windows (activity-viewer, search, taint) have their own narrower capability files.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "dialog:default",
+    "updater:default",
+    "process:allow-restart"
+  ]
+}

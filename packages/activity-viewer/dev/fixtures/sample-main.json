@@ -1,0 +1,128 @@
+{
+  "activity_name": "com.example.app.MainActivity",
+  "layout_id": 2131361825,
+  "layout_path": "res/layout/activity_main.xml",
+  "diagnostics": [
+    { "severity": "info",    "message": "2 setContentView sites found; picking onCreate's match.", "location": "com.example.app.MainActivity" },
+    { "severity": "warning", "message": "<fragment> with no android:name — can't recover its view", "location": "fragment_container" }
+  ],
+  "root": {
+    "tag": "androidx.constraintlayout.widget.ConstraintLayout",
+    "kind": { "kind": "constraintLayout" },
+    "source": { "kind": "xml", "layout_path": "res/layout/activity_main.xml" },
+    "id": "root",
+    "attrs": [
+      { "name": "android:layout_width",  "value": "match_parent",          "origin": "static" },
+      { "name": "android:layout_height", "value": "match_parent",          "origin": "static" },
+      { "name": "android:background",    "value": "#FFFFFFFF",             "origin": "static" }
+    ],
+    "click_handler": null,
+    "navigation": null,
+    "dynamic_modifications": [],
+    "children": [
+      {
+        "tag": "androidx.appcompat.widget.Toolbar",
+        "kind": { "kind": "toolbar" },
+        "source": { "kind": "included", "from_layout_path": "res/layout/activity_main.xml", "included_layout_path": "res/layout/toolbar_main.xml" },
+        "id": "toolbar",
+        "attrs": [
+          { "name": "android:layout_width",  "value": "match_parent",         "origin": "static" },
+          { "name": "android:layout_height", "value": "?attr/actionBarSize",  "origin": "static" },
+          { "name": "android:background",    "value": "#FF4285F4",            "origin": "static" },
+          { "name": "app:title",             "value": "Sample App",           "origin": "static" }
+        ],
+        "click_handler": null,
+        "navigation": null,
+        "dynamic_modifications": [],
+        "children": []
+      },
+      {
+        "tag": "LinearLayout",
+        "kind": { "kind": "linearLayout" },
+        "source": { "kind": "xml", "layout_path": "res/layout/activity_main.xml" },
+        "id": "content",
+        "attrs": [
+          { "name": "android:orientation",   "value": "vertical",       "origin": "static" },
+          { "name": "android:layout_width",  "value": "match_parent",   "origin": "static" },
+          { "name": "android:layout_height", "value": "0dp",            "origin": "static" },
+          { "name": "android:padding",       "value": "16dp",           "origin": "static" }
+        ],
+        "click_handler": null,
+        "navigation": null,
+        "dynamic_modifications": [],
+        "children": [
+          {
+            "tag": "TextView",
+            "kind": { "kind": "text" },
+            "source": { "kind": "xml", "layout_path": "res/layout/activity_main.xml" },
+            "id": "greeting",
+            "attrs": [
+              { "name": "android:layout_width",  "value": "wrap_content",          "origin": "static" },
+              { "name": "android:layout_height", "value": "wrap_content",          "origin": "static" },
+              { "name": "android:text",          "value": "Welcome to Sample App", "origin": "static" },
+              { "name": "android:textSize",      "value": "20sp",                  "origin": "static" }
+            ],
+            "click_handler": null,
+            "navigation": null,
+            "dynamic_modifications": [
+              { "setter": "setText", "value": "Welcome, {user.name}", "from_method": "Lcom/example/app/MainActivity;->onUserLoaded(Lcom/example/app/User;)V", "literal": false }
+            ],
+            "children": []
+          },
+          {
+            "tag": "Button",
+            "kind": { "kind": "button" },
+            "source": { "kind": "xml", "layout_path": "res/layout/activity_main.xml" },
+            "id": "settings_button",
+            "attrs": [
+              { "name": "android:layout_width",  "value": "wrap_content",  "origin": "static" },
+              { "name": "android:layout_height", "value": "wrap_content",  "origin": "static" },
+              { "name": "android:layout_marginTop", "value": "16dp",       "origin": "static" },
+              { "name": "android:text",          "value": "Open settings", "origin": "static" },
+              { "name": "android:onClick",       "value": "openSettings",  "origin": "static" }
+            ],
+            "click_handler": {
+              "kind": "xmlOnClick",
+              "target": "Lcom/example/app/MainActivity;->openSettings(Landroid/view/View;)V"
+            },
+            "navigation": {
+              "kind": "startActivity",
+              "target": "com.example.app.SettingsActivity"
+            },
+            "dynamic_modifications": [],
+            "children": []
+          },
+          {
+            "tag": "androidx.recyclerview.widget.RecyclerView",
+            "kind": { "kind": "recyclerView" },
+            "source": { "kind": "xml", "layout_path": "res/layout/activity_main.xml" },
+            "id": "items",
+            "attrs": [
+              { "name": "android:layout_width",  "value": "match_parent",   "origin": "static" },
+              { "name": "android:layout_height", "value": "0dp",            "origin": "static" },
+              { "name": "app:layout_constraintTop_toBottomOf", "value": "@id/settings_button", "origin": "static" }
+            ],
+            "click_handler": null,
+            "navigation": null,
+            "dynamic_modifications": [],
+            "children": []
+          },
+          {
+            "tag": "fragment",
+            "kind": { "kind": "fragment", "class_name": "" },
+            "source": { "kind": "xml", "layout_path": "res/layout/activity_main.xml" },
+            "id": "fragment_container",
+            "attrs": [
+              { "name": "android:layout_width",  "value": "match_parent",     "origin": "static" },
+              { "name": "android:layout_height", "value": "wrap_content",     "origin": "static" }
+            ],
+            "click_handler": null,
+            "navigation": null,
+            "dynamic_modifications": [],
+            "children": []
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/capabilities.schema.json",
+  "identifier": "search-window",
+  "description": "Permissions for the global search window",
+  "windows": ["search"],
+  "permissions": [
+    "core:default",
+    "core:event:default"
+  ]
+}

@@ -19,13 +19,11 @@ What can it be used for?
 
 ### AI stuffs
 
-No AI code generation will be used to generate the underlying code (only exception would be with helping generate tests for
-the classes as I hate the tediousness of building out tests). Additionally, there **will not** be *any* AI/LLM/ML
-\*shenanigans\* happening with decompiling, reversing, and rehydrating the code. 
+All AI/LLM usage in this is used to build the tool that drives the reverse engineering. It will NOT drive or 
+interpret anything for you. (everything should be deterministic) 
 
-Why no AI/LLM stuffs? → While it *kinda* does work, the results are not 100% reproducible, meaning that what you see and what I see 
-may and likely do differ. These differences, whether large or small, may result in very 
-different outcomes in how you evaluate each application, potentially resulting in skewed results.
+All code was initially built in python and then ported over. I have left the initial python code here and am keeping
+the rest of the python code local to prevent this from turning into or replacing androguard (major kudos and much respect to that project)
 
 As such, it is my belief and opinion that this tool should:
   - Allow for 100% reproducible results
@@ -36,7 +34,8 @@ As such, it is my belief and opinion that this tool should:
 ### Limitations
 
 Running native code is experimentally supported and will likely require a physical test device to run properly. There are 
-tentative plans to build an application/tool that allows this tool to bridge and take advantage of a physical test device.
+tentative plans to build an application/tool that allows this tool to bridge and take advantage of a physical test device
+or integrate directly (see: https://github.com/Isaac-GC/vardoger for current project related/status)
 
 ### Install
 

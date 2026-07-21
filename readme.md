@@ -47,18 +47,6 @@ or integrate directly (see: https://github.com/Isaac-GC/vardoger for current pro
 
 3. Run the code
 `python main.py`
-
-
-### TODO:
-- [ ] Rewrite mocks
-  - [ ] Instead of having custom python modules, consider parsing the base java libs
-- [ ] !!! Add in unit tests !!!
-- [ ] Rewrite instruction handling
-  - [ ] Parse `NOP` alternatives (`0x0010`,`0x0020`,`0x0030`)
-  - [ ] Ensure instructions are being parsed properly
-- [ ] Expand coverage to allow loading of ELF/DWARF binaries
-  - [ ] Emulate JNI capabilities
-  - [ ] Support UI presentation
  
 ---
 

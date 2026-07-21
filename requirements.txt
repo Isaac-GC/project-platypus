@@ -8,3 +8,4 @@ typing_extensions==4.5.0
 rich==13.9.4
 packaging~=25.0
 setuptools
+PyNaCl==1.5.0  # Ed25519 verification for the `licensing` offline-license package

@@ -4,7 +4,7 @@ import pkgutil
 import re
 from typing import Optional
 
-from dex.code_block import BasicBlock
+from dex.code_block import BasicBlock, EdgeKind
 from dex.dexfile import DexFile
 from dex.instructions_new import ControlFlow
 from dex.method import Method
@@ -134,13 +134,11 @@ class VM:
         log.debug(f"Calling: {method.clazz_name}->{method.method_name}")
         log.debug(f"[+] method has {len(method.code_block.blocks)} code blocks")
 
-        idx = 0
-        while idx < len(method.code_block.blocks):
-            idx_ret_val = self.execute_basic_block(method.code_block.blocks[idx])
-            if idx_ret_val:
-                idx = idx_ret_val
-            else:
-                idx += 1 # Just a normal "move to the next block"
+
+        # Start at the entry block, then follow CFG edges
+        current_block = method.code_block.entry
+        while current_block is not None:
+            current_block = self.execute_basic_block(current_block)
 
         self.call_stack.pop()
         return self.memory.last_return
@@ -157,19 +155,35 @@ class VM:
             # We don't care about what the instruction does here, only what its outcome is
             match instr.control_flow:
                 case ControlFlow.GoTo:
-                    return curr_method.code_block.lookup_codeblock_by_idx_offset(instr_val)
+                    target_codepoint = block.next_branch
+                    target_block = curr_method.code_block.lookup_codeblock_by_codepoint(target_codepoint)
+                    if target_block:
+                        return target_block
+                    log.error(f"GOTO target {target_codepoint:#x} not found")
+                    return None
 
                 case ControlFlow.Branch:
-                    if instr_val:
-                        return curr_method.code_block.lookup_codeblock_by_idx_offset(instr_val)
-                    else:
-                        return None
+                    taken_codepoint = self.memory.last_return
+                    if taken_codepoint:
+                        if taken_codepoint != 1:
+                            target_block = curr_method.code_block.lookup_codeblock_by_codepoint(taken_codepoint)
+                            if target_block:
+                                return target_block
+                    fall = next((e.target for e in block.successors if e.kind == EdgeKind.FALL_THROUGH), None)
+                    return fall
 
                 case ControlFlow.FallThrough:
+                    if instr.opcode in (0x2b, 0x2c):
+                        taken_codepoint = self.memory.last_return
+                        if taken_codepoint:
+                            target_block = curr_method.code_block.lookup_codeblock_by_codepoint(taken_codepoint)
+                            if target_block:
+                                return target_block
+                        fall = next((e.target for e in block.successors if e.kind == EdgeKind.FALL_THROUGH), None)
+                        return fall
+
                     if instr_val and instr_val.is_external_call:
                         fqn = curr_method.clazz_name + "->" + curr_method.method_name
-
-                        # TODO: Change this so the parameters are register offset references instead of direct references
                         params = [curr_method.registers[i] for i in instr_val.parameters]
 
                         if isinstance(instr_val.ret, int):
@@ -180,24 +194,23 @@ class VM:
                                 self.memory.last_return = None  # Forget it and try seeing if there is mock method for it
                                 try_to_mock_methods(instr_val.ret, instr_val.parameters, self, curr_method.registers)
 
-                        else:
-                            if len(self.call_stack) < 16: # Safety, may break things
-                                if not any([denied_method in fqn for denied_method in self.method_denylist]):
-                                    self.call_method(instr_val.ret, params)
-                                else:
-                                    self.memory.last_return = None
-                                    log.info(f"Method in denylist, skipping {fqn}")
-
-                            else:
+                        elif instr_val.ret is not None: # direct method ref
+                            if len(self.call_stack) >= 16: # safety, may break things
                                 self.memory.last_return = None
-                                log.error(f"Call stack size exceeded for {instr_val.ret}")
+                                log.error(f"Call stack depth exceeded at {curr_method.clazz_name}->{curr_method.method_name}")
 
+                            elif any([denied_method in fqn for denied_method in self.method_denylist]):
+                                self.memory.last_return = None
+                                log.info(f"Method in denylist, skipping {fqn}")
+                            else:
+                                self.call_method(instr_val.ret, params)
 
                 # Just end it right here, right now.
                 case ControlFlow.Terminate:
                     return None
 
-        return None # Worst case scenario, should never happen... probably should make into a try/except statement
+        fall = next((e.target for e in block.successors if e.kind == EdgeKind.FALL_THROUGH), None)
+        return fall # Worst case scenario, should never happen... probably should make into a try/except statement
 
 
     # TODO: Consider adding ability to debug or add "injection"/"hooking" points

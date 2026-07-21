@@ -2,10 +2,17 @@
 
 ![platypus_with_computer](./extra/imgs/platypus.jpg)
 
-This will get flushed out more in the future, allowing for more complex flows to be tracked. Currently it find and decrypt strings from a known decryption function reference.
+This is a partial dynamic/static analysis tool that is intended on being as on-par with some caveats to Androguard.
+One of the major changes you'll see is that it was centered around being built as a vm/emulator for Dalvik/dex code. 
 
+It has many features such as parsing multi-dex files, being able to run smali deobfuscator functions (For memory intensive
+deobfuscation functions, it is currently slow --> this will be fixed later)
 
-Please note: This is in the testing phase so options may be limited and you will have to change/modify the code to adapt to new options
+This was written primarily in python that was then converted to rust for usage in crates and more maintainability. (Its sister 
+project, [vardoger](https://github.com/Isaac-GC/vardoger), is written in c++ with a wrapper for python as thats intended to be closer
+to the system and I was too lazy to deal with the intracies/issues with rust)
+
+Please note: This is in the testing phase so it is likely you will encounter issues.
 
 ### Intention
 

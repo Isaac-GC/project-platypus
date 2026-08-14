@@ -1,8 +1,0 @@
-[package]
-name = "platypus-crypto"
-version = "0.1.0"
-edition = "2021"
-description = "Dependency-free symmetric crypto primitives for project-platypus: AES-128/256 (FIPS-197) with CBC mode (PKCS#7 + NoPadding). Replaces the aes + cbc RustCrypto crates so the deobfuscation/unpacking path carries zero external crypto dependencies."
-
-[lib]
-name = "platypus_crypto"

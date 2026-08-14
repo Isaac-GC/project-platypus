@@ -1,0 +1,11 @@
+[package]
+name = "platypus-vm"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "platypus_vm"
+
+[dependencies]
+platypus-dex    = { path = "../platypus-dex" }
+platypus-crypto = { path = "../platypus-crypto" }

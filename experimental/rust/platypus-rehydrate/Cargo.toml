@@ -1,0 +1,12 @@
+[package]
+name = "platypus-rehydrate"
+version = "0.1.0"
+edition = "2021"
+description = "Reconstruct Android activity view trees by combining manifest, resources, layout XML, and DEX bytecode analysis. Produces a UnifiedView IR consumed by the activity-viewer frontend."
+
+[dependencies]
+platypus-apk       = { path = "../platypus-apk" }
+platypus-dex       = { path = "../platypus-dex" }
+platypus-resources = { path = "../platypus-resources" }
+serde              = { version = "1", features = ["derive"] }
+serde_json         = "1"

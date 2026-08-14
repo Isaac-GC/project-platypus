@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "platypus-viewer",
+  "version": "0.1.0",
+  "identifier": "com.platypus.viewer",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5181",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "platypus-viewer",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 720,
+        "minHeight": 480,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.png"
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "Reconstruct + inspect Android activity layouts",
+    "longDescription": "Standalone Android activity viewer — load any APK, see every activity's reconstructed layout tree. Built on the same platypus-rehydrate engine used by Project Platypus's analyser.",
+    "createUpdaterArtifacts": false
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/REPLACE_OWNER/project_platypus/releases/latest/download/platypus-viewer-latest.json"
+      ],
+      "pubkey": "REPLACE_WITH_OUTPUT_OF_tauri_signer_generate",
+      "dialog": false,
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}

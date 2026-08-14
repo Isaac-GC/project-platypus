@@ -1,0 +1,14 @@
+[package]
+name = "platypus-apk"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "platypus_apk"
+
+[dependencies]
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# Already in the tree via `zip`'s deflate feature. We use it directly to inflate
+# raw entries ourselves when the `zip` crate refuses to read them — see the
+# fake-encryption-bit handling in `zip.rs`.
+flate2 = "1"

@@ -1,0 +1,11 @@
+[package]
+name = "platypus-resources"
+version = "0.1.0"
+edition = "2021"
+description = "Androguard-style high-level queries over AndroidManifest, resources.arsc, and layout XML — built on top of the platypus-apk binary parsers."
+
+[dependencies]
+platypus-apk = { path = "../platypus-apk" }
+# Drawable + future ResourceTable / IR types serialise to JSON for the
+# Python bindings + the activity-viewer frontend.
+serde = { version = "1", features = ["derive"] }

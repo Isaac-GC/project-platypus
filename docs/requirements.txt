@@ -1,5 +1,0 @@
-# Docs toolchain. The `platypus` module itself is built separately (maturin /
-# `pip install ./rust`) — see .readthedocs.yaml and docs/README.md.
-sphinx>=7
-furo>=2024.1
-myst-parser>=2     # renders docs/scripting-api.md
